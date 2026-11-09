@@ -13,6 +13,7 @@ FASTAPI_ENV=development.
 
 import logging
 import os
+from typing import NamedTuple
 
 from sqlmodel import Session
 
@@ -25,23 +26,40 @@ from app.models import UserCreate
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# (email, role, password env var, local-only default password)
+
+class DemoUser(NamedTuple):
+    email: str
+    role: Role
+    password_env_var: str
+    default_password: str
+
+
 DEMO_USERS = [
-    ("manager@example.com", Role.MANAGER, "DEMO_MANAGER_PASSWORD", "manager-demo-pass"),
-    ("member@example.com", Role.MEMBER, "DEMO_MEMBER_PASSWORD", "member-demo-pass"),
+    DemoUser(
+        email="manager@example.com",
+        role=Role.MANAGER,
+        password_env_var="DEMO_MANAGER_PASSWORD",
+        default_password="manager-demo-pass",
+    ),
+    DemoUser(
+        email="member@example.com",
+        role=Role.MEMBER,
+        password_env_var="DEMO_MEMBER_PASSWORD",
+        default_password="member-demo-pass",
+    ),
 ]
 
 
 def seed(session: Session) -> None:
     init_db(session)  # make sure the admin (FIRST_SUPERUSER) exists
-    for email, role, password_var, default_password in DEMO_USERS:
-        if crud.get_user_by_email(session=session, email=email):
-            logger.info("Skipping %s: user already exists", email)
+    for demo in DEMO_USERS:
+        if crud.get_user_by_email(session=session, email=demo.email):
+            logger.info("Skipping %s: user already exists", demo.email)
             continue
-        password = os.environ.get(password_var, default_password)
-        user_in = UserCreate(email=email, password=password, role=role)
+        password = os.environ.get(demo.password_env_var, demo.default_password)
+        user_in = UserCreate(email=demo.email, password=password, role=demo.role)
         crud.create_user(session=session, user_create=user_in)
-        logger.info("Created %s with role %s", email, role)
+        logger.info("Created %s with role %s", demo.email, demo.role)
 
 
 def main() -> None:

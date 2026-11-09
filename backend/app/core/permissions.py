@@ -63,9 +63,7 @@ class HasRole(Protocol):
 
 
 def permissions_for(role: Role) -> frozenset[Permission]:
-    # Role(...) also normalises the raw string loaded from the DB; an unknown
-    # value raises instead of silently granting an empty or wrong set.
-    return ROLE_PERMISSIONS[Role(role)]
+    return ROLE_PERMISSIONS[role]
 
 
 def has_permission(user: HasRole, permission: Permission) -> bool:

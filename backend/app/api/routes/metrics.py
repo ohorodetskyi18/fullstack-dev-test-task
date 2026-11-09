@@ -17,11 +17,12 @@ def read_metrics(session: SessionDep) -> MetricsPublic:
     """
     Basic usage metrics (stub): user counts per role and total items.
     """
-    users_by_role = dict.fromkeys(Role, 0)
-    for role, count in session.exec(
-        select(User.role, func.count()).group_by(User.role)
-    ).all():
-        users_by_role[Role(role)] = count
+    users_by_role = {
+        role: session.exec(
+            select(func.count()).select_from(User).where(User.role == role)
+        ).one()
+        for role in Role
+    }
 
     total_items = session.exec(select(func.count()).select_from(Item)).one()
     return MetricsPublic(
