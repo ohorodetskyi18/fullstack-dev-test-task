@@ -346,6 +346,29 @@ def test_invalid_token_returns_401(client: TestClient, token: str) -> None:
     assert r.headers["WWW-Authenticate"] == "Bearer"
 
 
+def test_token_of_deleted_user_returns_401(client: TestClient, db: Session) -> None:
+    user, headers = create_user_with_role(client=client, db=db, role=MEMBER)
+    db.delete(user)
+    db.commit()
+
+    r = client.get(f"{API}/users/me", headers=headers)
+
+    assert r.status_code == 401
+    assert r.headers["WWW-Authenticate"] == "Bearer"
+
+
+def test_token_of_deactivated_user_returns_401(client: TestClient, db: Session) -> None:
+    user, headers = create_user_with_role(client=client, db=db, role=MEMBER)
+    user.is_active = False
+    db.add(user)
+    db.commit()
+
+    r = client.get(f"{API}/users/me", headers=headers)
+
+    assert r.status_code == 401
+    assert r.json() == {"detail": "Inactive user"}
+
+
 def test_denied_attempt_is_logged(
     client: TestClient, db: Session, caplog: pytest.LogCaptureFixture
 ) -> None:

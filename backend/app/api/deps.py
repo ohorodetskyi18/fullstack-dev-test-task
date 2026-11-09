@@ -33,6 +33,14 @@ SessionDep = Annotated[Session, Depends(get_db)]
 TokenDep = Annotated[str, Depends(reusable_oauth2)]
 
 
+def unauthorized(detail: str) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail=detail,
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
 def get_current_user(session: SessionDep, token: TokenDep) -> User:
     try:
         payload = jwt.decode(
@@ -40,16 +48,14 @@ def get_current_user(session: SessionDep, token: TokenDep) -> User:
         )
         token_data = TokenPayload(**payload)
     except InvalidTokenError, ValidationError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise unauthorized("Could not validate credentials")
+    # A valid token of a deleted or deactivated user is no longer a valid
+    # session: 401 makes the client log out instead of showing a broken page.
     user = session.get(User, token_data.sub)
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise unauthorized("Could not validate credentials")
     if not user.is_active:
-        raise HTTPException(status_code=400, detail="Inactive user")
+        raise unauthorized("Inactive user")
     return user
 
 

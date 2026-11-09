@@ -71,7 +71,7 @@ Rules on top of the matrix:
 
 **How the frontend learns capabilities.** `GET /api/v1/users/me` returns the user plus `permissions`, computed by the backend. The [`usePermissions()`](frontend/src/hooks/usePermissions.ts) hook exposes `can(permission)`; the sidebar and settings tabs declare an optional `permission` and are filtered with it, buttons such as "Add User" use it directly, and [`<RequirePermission>`](frontend/src/components/Common/RequirePermission.tsx) renders an *Access denied* card on direct navigation to a page the user cannot open. The frontend has no role → permission mapping; role names appear only in display code (labels, the role badge, the role select and its `member` default), never in access decisions. Hiding UI is UX only — the API is the enforcement point.
 
-**401 vs 403.** A missing, invalid or expired token returns `401` with `WWW-Authenticate: Bearer`; the frontend then logs the user out. An authenticated user without the permission gets `403`; the frontend shows a "You don't have permission to do that" toast, keeps the session and refetches `/users/me` in case the role has changed. (The template logged users out on both and returned 403 for bad tokens.)
+**401 vs 403.** A missing, invalid or expired token — or a valid token of a deleted or deactivated user — returns `401` with `WWW-Authenticate: Bearer`; the frontend then logs the user out. An authenticated user without the permission gets `403`; the frontend shows a "You don't have permission to do that" toast, keeps the session and refetches `/users/me` in case the role has changed. (The template logged users out on both, returned 403 for bad tokens, and 404 / 400 for deleted / inactive users.)
 
 ```mermaid
 flowchart TB
@@ -79,7 +79,9 @@ flowchart TB
     R[HTTP request + Bearer JWT] --> T{JWT valid?}
     T -- no --> E401[401 Unauthorized<br/>WWW-Authenticate: Bearer]
     T -- yes --> L[Load user + role from DB<br/>get_current_user]
-    L --> P{require_permission<br/>route level}
+    L --> U{user exists<br/>and is active?}
+    U -- no --> E401
+    U -- yes --> P{require_permission<br/>route level}
     P -- no --> E403[403 Forbidden<br/>+ WARNING to app.authz]
     P -- yes --> H[Route handler]
     H --> O{ensure_permission<br/>object level, if needed}

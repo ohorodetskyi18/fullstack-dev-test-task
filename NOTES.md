@@ -20,7 +20,7 @@ About 2 hours of implementation with the agent, then about 1 hour of review with
 - **`settings:manage` is backend-only.** The template has no global settings page, so the permission guards only `POST /utils/test-email/` and has no UI.
 - **Frontend permissions can be stale** until `/users/me` is refetched (on reload, on any 403, after profile updates). This affects only what the UI shows; the API enforces every request.
 - **Unknown fields are ignored, not rejected.** `PATCH /users/me` or signup with `{"role": "admin"}` returns 200 and leaves the role unchanged (template behaviour of SQLModel schemas). Returning 422 with `extra="forbid"` would be more explicit.
-- **Template behaviours kept as-is:** a valid token of a deleted user returns 404 and an inactive user gets 400 (not 401/403); JWTs live 8 days and cannot be revoked.
+- **Template behaviour kept as-is:** JWTs live 8 days and cannot be revoked; logging in as an inactive user returns 400 "Inactive user".
 - **Migration downgrade is lossy:** managers and members both become regular users, because `is_superuser` cannot represent them.
 - **Tests wipe the dev database's users** (template fixture behaviour). Re-run `uv run python -m app.seed_demo_users` afterwards.
 - `scripts/test.sh` needs `uv run` (it calls `coverage` from the virtualenv).
@@ -28,7 +28,7 @@ About 2 hours of implementation with the agent, then about 1 hour of review with
 ## Template issues fixed along the way
 
 - `POST /password-recovery-html-content/{email}` returned a `subject:` header (invalid name) and crashed for everyone; found by the new matrix test, fixed in a separate commit.
-- `get_current_user` returned 403 for invalid tokens; now 401 with `WWW-Authenticate: Bearer`.
+- `get_current_user` returned 403 for invalid tokens, 404 for a deleted user's token and 400 for an inactive user; all three are now 401 with `WWW-Authenticate: Bearer`, so the frontend logs such sessions out instead of showing a broken page.
 - The frontend logged users out on any 403; now only on 401.
 - The settings page computed `tabsConfig.slice(0, 3)` for superusers, which still showed the Danger zone tab; tabs are now filtered by `account:delete_own`.
 
