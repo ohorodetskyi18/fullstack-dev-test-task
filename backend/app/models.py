@@ -1,8 +1,9 @@
 import uuid
 from datetime import UTC, datetime
 
+import sqlalchemy as sa
 from pydantic import EmailStr, computed_field
-from sqlmodel import Field, Relationship, SQLModel, String
+from sqlmodel import Field, Relationship, SQLModel
 
 from app.core.permissions import Permission, Role, permissions_for
 
@@ -15,11 +16,16 @@ def get_datetime_utc() -> datetime:
 class UserBase(SQLModel):
     email: EmailStr = Field(unique=True, index=True, max_length=255)
     is_active: bool = True
-    # VARCHAR, not a native Postgres ENUM: adding a role needs no migration.
-    # The Role enum validates values at the API boundary.
+    # Stored as VARCHAR (native_enum=False), not a Postgres ENUM, so adding a
+    # role needs no migration. Loaded back as Role; unknown values fail loudly.
     role: Role = Field(
         default=Role.MEMBER,
-        sa_type=String(20),
+        sa_type=sa.Enum(
+            Role,
+            native_enum=False,
+            length=20,
+            values_callable=lambda roles: [role.value for role in roles],
+        ),
         sa_column_kwargs={"server_default": Role.MEMBER.value},
     )
     full_name: str | None = Field(default=None, max_length=255)
