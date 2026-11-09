@@ -4,6 +4,32 @@
 
 > **Verification status.** I could not register a Hetzner account, so the Hetzner path (`./deploy.sh`) has **not been run against the real Hetzner API**. Everything that happens on the server was verified end to end with `./deploy.sh --local`. That mode boots the same Ubuntu 24.04 cloud image with the same `cloud-init.yaml` in a local Multipass VM and goes through the real Tailscale tunnels. See [Verification](#verification).
 
+## Quick start: run it locally (no Hetzner account needed)
+
+1. Install the tools: `brew install jq gettext && brew install --cask multipass`. Log in to your tailnet on this machine with the [Tailscale client](https://tailscale.com/download).
+2. In the Tailscale admin console:
+   - enable MagicDNS and HTTPS certificates;
+   - add the [policy snippet](#prerequisites) (`tag:ghost`, Funnel, SSH);
+   - generate an auth key: **reusable, ephemeral, tag `tag:ghost`**.
+3. Configure:
+   ```bash
+   cd task2-ghost-hetzner
+   cp .env.example .env    # set TS_AUTHKEY and TS_TAILNET_DNS; HCLOUD_TOKEN is not needed locally
+   ```
+4. Deploy and verify:
+   ```bash
+   ./deploy.sh --local     # ends with "PASS all checks passed" and prints the URLs
+   ```
+5. Open `https://ghost-blog.<your-tailnet>.ts.net`. The admin panel is at `/ghost`; run `cat .ghost-admin-credentials` for the login.
+6. Tear down:
+   ```bash
+   ./destroy.sh --local    # leaves the tailnet and deletes the VM
+   ```
+
+**To deploy again,** run `./deploy.sh --local` after `./destroy.sh --local`. A reusable key works for every run until it expires. If a VM was deleted any other way, first remove the `ghost-blog` device in the Tailscale admin console.
+
+**On Hetzner,** set `HCLOUD_TOKEN` in `.env`, use a single-use, non-ephemeral key, and run `./deploy.sh` / `./destroy.sh` without `--local`.
+
 ## Architecture
 
 ```mermaid
