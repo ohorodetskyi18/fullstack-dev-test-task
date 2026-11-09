@@ -1,0 +1,105 @@
+#cloud-config
+# Template rendered by deploy.sh with envsubst. Only the variables TS_AUTHKEY, SERVER_NAME and
+# GHOST_URL are substituted; every other dollar-brace reference is left for Docker Compose / bash.
+#
+# Result: Ghost + MySQL in Docker, Ghost bound to 127.0.0.1 only, published to the internet
+# through Tailscale Funnel. No inbound ports: sshd is masked and ufw denies all incoming traffic.
+
+package_update: true
+packages:
+  - docker.io
+  - docker-compose-v2
+  - ufw
+  - curl
+  - openssl
+
+write_files:
+  # Single-use Tailscale auth key; deleted by bootstrap.sh right after `tailscale up`.
+  - path: /root/ts-authkey
+    permissions: "0600"
+    content: "${TS_AUTHKEY}"
+
+  - path: /opt/ghost/compose.yml
+    permissions: "0644"
+    content: |
+      services:
+        db:
+          image: mysql:8.4
+          restart: unless-stopped
+          environment:
+            MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+            MYSQL_DATABASE: ghost
+            MYSQL_USER: ghost
+            MYSQL_PASSWORD: ${DB_PASSWORD}
+          volumes:
+            - db:/var/lib/mysql
+          healthcheck:
+            test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
+            interval: 5s
+            timeout: 5s
+            retries: 60
+
+        ghost:
+          image: ghost:6-alpine
+          restart: unless-stopped
+          depends_on:
+            db:
+              condition: service_healthy
+          ports:
+            - "127.0.0.1:2368:2368"   # localhost only — reachable from outside only via Funnel
+          environment:
+            url: ${GHOST_URL}
+            NODE_ENV: production
+            database__client: mysql
+            database__connection__host: db
+            database__connection__user: ghost
+            database__connection__password: ${DB_PASSWORD}
+            database__connection__database: ghost
+            # No SMTP is configured, so emailed login codes could never arrive.
+            security__staffDeviceVerification: "false"
+          volumes:
+            - content:/var/lib/ghost/content
+
+      volumes:
+        db:
+        content:
+
+  - path: /opt/ghost/bootstrap.sh
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/ghost-bootstrap.log) 2>&1
+      echo "bootstrap started $(date -Is)"
+
+      # 1. No inbound traffic: firewall first, then remove the SSH daemon entirely.
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw --force enable
+      systemctl disable --now ssh.socket ssh.service || true
+      systemctl mask ssh.socket ssh.service
+
+      # 2. Join the tailnet (outbound connection). --ssh enables Tailscale SSH for admins.
+      curl -fsSL https://tailscale.com/install.sh | sh
+      tailscale up --auth-key=file:/root/ts-authkey --hostname="${SERVER_NAME}" --ssh
+      shred -u /root/ts-authkey
+
+      # 3. Ghost + MySQL. DB passwords are generated here and never leave the server.
+      cd /opt/ghost
+      if [[ ! -f .env ]]; then
+        umask 077
+        printf 'DB_PASSWORD=%s\nDB_ROOT_PASSWORD=%s\n' "$(openssl rand -hex 24)" "$(openssl rand -hex 24)" > .env
+      fi
+      # Retry: a dropped connection during the image pull would otherwise abort the bootstrap.
+      for attempt in 1 2 3; do
+        docker compose up -d --wait && break
+        [[ $attempt -eq 3 ]] && exit 1
+        echo "docker compose failed (attempt $attempt), retrying in 15 s"; sleep 15
+      done
+
+      # 4. Publish Ghost on https://<hostname>.<tailnet>.ts.net via Tailscale Funnel.
+      tailscale funnel --bg 2368
+      echo "bootstrap finished $(date -Is)"
+
+runcmd:
+  - [/opt/ghost/bootstrap.sh]

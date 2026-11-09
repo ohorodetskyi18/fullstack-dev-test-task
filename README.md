@@ -3,7 +3,7 @@
 | Task | Where | Summary |
 |------|-------|---------|
 | 1. RBAC for Full-Stack FastAPI Template | this repository (template + RBAC changes), [documented below](#task-1--rbac-for-the-full-stack-fastapi-template) | Roles admin / manager / member enforced in the FastAPI backend and React frontend, with migration, seed data, tests and ADRs |
-| 2. One-click Ghost on Hetzner without public SSH | [task2-ghost-hetzner/](task2-ghost-hetzner/) | `./deploy.sh` provisions a Hetzner VPS with no open inbound ports; the blog is published via Tailscale Funnel, admin access only via Tailscale SSH |
+| 2. One-click Ghost on Hetzner without public SSH | [task2-ghost-hetzner/](task2-ghost-hetzner/) | `./deploy.sh` provisions a Hetzner VPS with no open inbound ports; the blog is published via Tailscale Funnel, admin access only via Tailscale SSH. Verified end to end on a local VM with the same cloud-init (`./deploy.sh --local`); the Hetzner API calls were not run (no Hetzner account) |
 
 ```
 .
@@ -15,7 +15,7 @@
 
 **AI usage.** Both tasks were done with AI tools, as allowed by the assignment. Transcripts are in [ai-conversations/](ai-conversations/): [implementation of task 1](ai-conversations/2026-11-09-context-you-are-a-senior-full-stack-engineer-worki.txt). The AI agent wrote most of the code. I defined the requirements and design decisions, reviewed each phase, and verified the results locally.
 
-**Time spent.** Task 1: ~3 h including review fixes (see [NOTES.md](NOTES.md#time-spent)) · Task 2: ~<Y> h. Scope cuts and trade-offs: [NOTES.md](NOTES.md), [task2-ghost-hetzner/README.md#limitations](task2-ghost-hetzner/README.md#limitations).
+**Time spent.** Task 1: ~3 h including review fixes (see [NOTES.md](NOTES.md#time-spent)) · Task 2: ~2.5 h. Scope cuts and trade-offs: [NOTES.md](NOTES.md), [task2-ghost-hetzner/README.md#limitations](task2-ghost-hetzner/README.md#limitations).
 
 ---
 
