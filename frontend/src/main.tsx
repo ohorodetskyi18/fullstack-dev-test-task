@@ -8,6 +8,7 @@ import { createRouter, RouterProvider } from "@tanstack/react-router"
 import { AxiosError } from "axios"
 import { StrictMode } from "react"
 import ReactDOM from "react-dom/client"
+import { toast } from "sonner"
 import { client } from "./client/client.gen"
 import { ThemeProvider } from "./components/theme-provider"
 import { Toaster } from "./components/ui/sonner"
@@ -20,12 +21,17 @@ client.setConfig({
 })
 
 const handleApiError = (error: Error) => {
-  if (
-    error instanceof AxiosError &&
-    [401, 403].includes(error.response?.status ?? 0)
-  ) {
+  if (!(error instanceof AxiosError)) return
+  const status = error.response?.status
+  if (status === 401) {
+    // Missing, invalid or expired token: the session is over.
     localStorage.removeItem("access_token")
     window.location.href = "/login"
+  } else if (status === 403) {
+    // Authenticated but not allowed: keep the session, tell the user and
+    // reload permissions in case the user's role has just changed.
+    toast.error("You don't have permission to do that", { id: "forbidden" })
+    queryClient.invalidateQueries({ queryKey: ["currentUser"] })
   }
 }
 const queryClient = new QueryClient({

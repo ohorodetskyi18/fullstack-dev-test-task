@@ -15,6 +15,8 @@ function extractErrorMessage(err: Error): string {
 }
 
 export const handleError = function (this: (msg: string) => void, err: Error) {
+  // 403s are reported once, globally, by handleApiError in main.tsx.
+  if (err instanceof AxiosError && err.response?.status === 403) return
   const errorMessage = extractErrorMessage(err)
   this(errorMessage)
 }

@@ -1,15 +1,29 @@
 import { createFileRoute } from "@tanstack/react-router"
+import type { ComponentType } from "react"
 
+import type { Permission } from "@/client"
 import ChangePassword from "@/components/UserSettings/ChangePassword"
 import DeleteAccount from "@/components/UserSettings/DeleteAccount"
 import UserInformation from "@/components/UserSettings/UserInformation"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import useAuth from "@/hooks/useAuth"
+import usePermissions from "@/hooks/usePermissions"
 
-const tabsConfig = [
+// Tabs without `permission` are visible to every signed-in user.
+const tabsConfig: {
+  value: string
+  title: string
+  component: ComponentType
+  permission?: Permission
+}[] = [
   { value: "my-profile", title: "My profile", component: UserInformation },
   { value: "password", title: "Password", component: ChangePassword },
-  { value: "danger-zone", title: "Danger zone", component: DeleteAccount },
+  {
+    value: "danger-zone",
+    title: "Danger zone",
+    component: DeleteAccount,
+    permission: "account:delete_own",
+  },
 ]
 
 export const Route = createFileRoute("/_layout/settings")({
@@ -25,9 +39,10 @@ export const Route = createFileRoute("/_layout/settings")({
 
 function UserSettings() {
   const { user: currentUser } = useAuth()
-  const finalTabs = currentUser?.is_superuser
-    ? tabsConfig.slice(0, 3)
-    : tabsConfig
+  const { can } = usePermissions()
+  const finalTabs = tabsConfig.filter(
+    (tab) => !tab.permission || can(tab.permission),
+  )
 
   if (!currentUser) {
     return null
