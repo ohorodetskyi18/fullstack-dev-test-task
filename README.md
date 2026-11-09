@@ -13,7 +13,7 @@
 └── ai-conversations/          # AI transcripts
 ```
 
-**AI usage.** Both tasks were done with AI tools, as allowed by the assignment. Transcripts are in [ai-conversations/](ai-conversations/): `01-planning.md` (analysing the task, choosing the approach, preparing agent prompts), `02-task1-rbac-agent.md` (implementation of task 1), `03-task2-ghost-agent.md` (implementation of task 2). The AI agent wrote most of the code. I defined the requirements and design decisions, reviewed each phase, and verified the results locally.
+**AI usage.** Both tasks were done with AI tools, as allowed by the assignment. Transcripts are in [ai-conversations/](ai-conversations/): [implementation of task 1](ai-conversations/2026-11-09-context-you-are-a-senior-full-stack-engineer-worki.txt). The AI agent wrote most of the code. I defined the requirements and design decisions, reviewed each phase, and verified the results locally.
 
 **Time spent.** Task 1: ~3 h including review fixes (see [NOTES.md](NOTES.md#time-spent)) · Task 2: ~<Y> h. Scope cuts and trade-offs: [NOTES.md](NOTES.md), [task2-ghost-hetzner/README.md#limitations](task2-ghost-hetzner/README.md#limitations).
 
