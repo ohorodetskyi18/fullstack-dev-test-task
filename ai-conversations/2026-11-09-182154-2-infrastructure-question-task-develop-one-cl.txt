@@ -1,0 +1,2004 @@
+[Abridged and lightly edited: some messages removed, some prompts reworded for clarity, commit hashes and the README verification output updated to the final versions.]
+
+❯ 2 - infrastructure question task - Develop one click script to deploy ghost
+  blog platform at a Hetzner VPS with no publish SSH access, only through
+  tunnels (provider/app)
+
+  що треба зробити для цього пункту тестового завдання?
+
+  Listed 1 directory, ran 2 shell commands (ctrl+o to expand)
+
+⏺ Коротко: у task2-ghost-hetzner/README.md вже є чернетка з обраним підходом,
+  але самого коду ще немає. Там тільки README із заглушками <...>.
+
+  Що означає завдання
+
+  Потрібен один скрипт, який з нуля піднімає блог Ghost на VPS у Hetzner. При
+  цьому на сервер не можна потрапити по SSH з інтернету: на публічній IP не
+  слухає жоден порт. Відвідувачі заходять на блог через тунель, адміністратор
+  теж заходить через тунель. Це роблять або сервісом провайдера (Cloudflare
+  Tunnel, Tailscale), або окремою програмою на сервері (cloudflared,
+  tailscaled). Здогадуюсь, що «(provider/app)» означає саме це. «no publish SSH»
+  — найімовірніше, опечатка в «no public SSH».
+
+  У чернетці обрано Tailscale:
+  - Tailscale Funnel публікує блог за HTTPS на
+    https://ghost-blog.<tailnet>.ts.net. Власний домен не потрібен.
+  - Tailscale SSH дає адмінський доступ тільки з вашого tailnet.
+  - Обидва з'єднання вихідні з VPS, тому вхідні порти можна закрити повністю.
+
+  Що треба зробити
+
+  1. Файли в task2-ghost-hetzner/
+
+  Файл: deploy.sh
+  Що робить: Сам «один клік»: перевіряє інструменти та .env, створює Hetzner
+    Firewall без вхідних правил і сервер із cloud-init. Далі чекає, поки нода
+    з'явиться в Tailscale і блог почне відповідати. Наприкінці перевіряє, що
+  порт
+     22 на публічній IP закритий (PASS/FAIL), і друкує URL.
+  ────────────────────────────────────────
+  Файл: cloud-init.yaml (шаблон для envsubst)
+  Що робить: Ставить Docker і Tailscale, виконує tailscale up --authkey … --ssh
+    --hostname …, вимикає sshd, вмикає ufw deny incoming. Запускає Ghost і MySQL
+
+    через Docker Compose і робить tailscale funnel --bg 2368.
+  ────────────────────────────────────────
+  Файл: docker-compose.yml (або вбудований у cloud-init)
+  Що робить: ghost:5 + mysql:8. Ghost слухає лише 127.0.0.1:2368, а url дорівнює
+
+    Funnel-адресі. Без цього Ghost генеруватиме неправильні посилання.
+  ────────────────────────────────────────
+  Файл: destroy.sh
+  Що робить: Видаляє сервер і firewall, перед цим питає підтвердження (--yes,
+  щоб
+    пропустити).
+  ────────────────────────────────────────
+  Файл: .env.example + .gitignore для .env
+  Що робить: Змінні середовища, без реальних секретів у репозиторії.
+
+  2. Заповнити заглушки в README: команди встановлення hcloud/envsubst, JSON для
+  ACL Tailscale (tagOwners для tag:ghost, атрибут funnel, правила ssh) і тип
+  сервера. Також розділи Operate, Security notes, Alternatives considered і
+  Limitations.
+
+  3. Реально задеплоїти й перевірити. Ваші умови вимагають не стверджувати, що
+  щось працює, поки ви це не запустили. Для цього потрібні:
+  - Hetzner Cloud: проєкт і API-токен (Read & Write). Сервер оплачується
+    погодинно, тест коштуватиме кілька центів.
+  - Tailscale: безкоштовний акаунт з увімкненими MagicDNS і HTTPS, ACL з
+    tag:ghost і одноразовий pre-approved auth key.
+  - Після деплою: блог відкривається, nc -z <IP> 22 не з'єднується, tailscale
+    ssh root@ghost-blog працює, destroy.sh усе прибирає.
+
+  4. Решта для здачі: час Task 2 замість ~<Y> h у кореневому README.md
+  (README.md#L18) і транскрипт ai-conversations/03-task2-ghost-agent.md.
+
+  Що варто вміти пояснити на співбесіді
+
+  - Чому немає вхідних портів: обидва тунелі вихідні. Захист у кілька шарів:
+    Hetzner Firewall, вимкнений sshd, ufw і Ghost тільки на localhost.
+  - Аварійний доступ: веб-консоль Hetzner (VNC) лишається, якщо Tailscale впаде.
+    Hetzner надсилає root-пароль на пошту, якщо сервер створено без SSH-ключа.
+  - Залишкові ризики:
+    - /ghost доступний публічно. Owner-акаунт треба створити одразу після
+      деплою.
+    - Auth key лишається в user-data. Це пом'якшує одноразовий ключ.
+    - Funnel дозволяє лише порти 443, 8443 і 10000.
+  - Альтернативи:
+    - Cloudflare Tunnel + Access потребує власного домену в Cloudflare.
+    - Terraform замість hcloud CLI.
+    - Ghost-CLI на хості замість Docker.
+
+  Якщо хочете, можу написати ці скрипти. Але задеплоїти й перевірити їх зможу
+  тільки після того, як ви дасте токени Hetzner і Tailscale, або запустите
+  deploy.sh у себе. Ще одне: у промпті Task 1 ця папка позначена «DO NOT TOUCH»,
+  бо Task 2 планувалася окремою сесією. Тож скажіть, чи робимо її тут.
+
+❯ я додай пристрій в tailscale, додав ключ в .env, перевір чи все правильно і
+  що далі робити
+
+  Ran 3 shell commands (ctrl+o to expand)
+
+⏺ Tailscale is configured correctly, but the root .env file is tracked by git
+  and would publish the auth key on the next commit and push. I'm moving the
+  variables into task2-ghost-hetzner/.env, which git will ignore, and I won't
+  print the key.
+
+⏺ Bash(set -e
+      umask 077…)
+  ⎿  Updated ~/fullstack-dev-test-task/.env (+0 -3)
+      16  # Postgres
+      17  POSTGRES_PASSWORD=changethis
+      18  DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@localho
+          st:5432/app
+      19 -                                                               
+      20 -TS_TAILNET_DNS=tailbbeca6.ts.net                               
+      21 -TS_AUTHKEY=tskey-auth-[REDACTED]
+         -paKrWt7va                                                      
+  ⎿  Created .gitignore (+1 -0)
+      1 +.env                                                            
+
+⏺ Tailscale налаштовано правильно. Тепер ключ лежить у правильному місці. Для
+  деплою ще бракує токена Hetzner і самих скриптів: вони ще не написані.
+
+  Що я перевірив
+
+  Що: Ваш MacBook у tailnet
+  Результат: ✅ 164-macbook, онлайн
+  ────────────────────────────────────────
+  Що: TS_TAILNET_DNS=tailbbeca6.ts.net
+  Результат: ✅ збігається з вашим tailnet
+  ────────────────────────────────────────
+  Що: MagicDNS і HTTPS-сертифікати
+  Результат: ✅ увімкнені, без них Funnel не запрацює
+  ────────────────────────────────────────
+  Що: Формат TS_AUTHKEY
+  Результат: ✅ tskey-auth-…, без лапок і пробілів
+  ────────────────────────────────────────
+  Що: Де лежав ключ
+  Результат: ❌ Був у кореневому .env, а цей файл відстежується git. Я переніс
+    обидві змінні в task2-ghost-hetzner/.env (права 600) і додав
+    task2-ghost-hetzner/.gitignore. Кореневий .env повернувся до стану з коміту.
+
+    Ключ нікуди не потрапив, тому міняти його не треба.
+
+  Сервер окремо додавати в Tailscale не потрібно. Він сам підключиться під час
+  деплою за цим auth key.
+
+  Що перевірте самі в консолі Tailscale
+
+  Звідси я не можу побачити ні властивості ключа, ні ACL.
+
+  1. Auth key (Settings → Keys):
+  - Tags = tag:ghost. Це обов'язково, бо Funnel і SSH-правила прив'язані до
+    тегу.
+  - Pre-approved увімкнено.
+  - Ephemeral вимкнено.
+  - Reusable вимкнено. Одноразовий ключ безпечніший, але якщо деплой впаде, для
+    повтору знадобиться новий ключ.
+
+  Якщо тег не задали, створіть ключ заново після кроку 2. Тег не з'явиться у
+  списку, доки його немає в ACL.
+
+  2. ACL (Access controls): додайте в policy file
+  "tagOwners": { "tag:ghost": ["autogroup:admin"] },
+  "nodeAttrs": [ { "target": ["tag:ghost"], "attr": ["funnel"] } ],
+  "ssh": [
+    { "action": "accept", "src": ["autogroup:admin"], "dst": ["tag:ghost"],
+  "users": ["root"] }
+  ]
+  Якщо секції ssh чи nodeAttrs уже є, допишіть елементи у наявні масиви, а не
+  створюйте другу копію. Стандартне правило ssh з autogroup:self не дає доступу
+  до серверів із тегом, тому потрібне окреме правило.
+
+  Що далі
+
+  1. Hetzner: поставте CLI командою brew install hcloud. Потім у
+     https://console.hetzner.com створіть проєкт, відкрийте Security → API
+     tokens і згенеруйте токен Read & Write. Допишіть у task2-ghost-hetzner/.env
+     рядок HCLOUD_TOKEN=....
+  2. Скрипти: напишу deploy.sh, destroy.sh, cloud-init.yaml, .env.example і
+     заповню README, якщо скажете. Можу робити це паралельно з кроком 1.
+  3. Деплой: ./deploy.sh, потім одразу створити owner-акаунт на
+     https://ghost-blog.tailbbeca6.ts.net/ghost.
+  4. Перевірка:
+     - блог відкривається;
+     - порт 22 на публічній IP закритий;
+     - tailscale ssh root@ghost-blog працює;
+     - ./destroy.sh усе прибирає.
+
+     Виводи команд піде в README як доказ.
+
+  Писати скрипти зараз?
+
+❯ окей то як мені перевірити чи правильно виконано 2 завдання? я не можу
+  зареєструвати акаунт в Hetzner
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Перевіряти поки нічого: у task2-ghost-hetzner/ лежить лише чернетка README із
+  заглушками, а скриптів ще немає. Без Hetzner можна перевірити все, крім одного
+  кроку: створення сервера через Hetzner API.
+
+  Ідея: та сама система, але на локальній віртуальній машині
+
+  На Hetzner сервер на Ubuntu 24.04 налаштовується через cloud-init: ставляться
+  Docker, Ghost, MySQL і Tailscale, вимикається sshd. multipass запускає на Mac
+  такий самий образ Ubuntu і виконує той самий cloud-init файл. Тому на вашому
+  Mac можна по-справжньому перевірити все, що відбувається всередині сервера.
+
+  Пропоную, щоб скрипт мав два режими:
+  ./deploy.sh            # Hetzner: створює firewall + сервер через hcloud
+  ./deploy.sh --local    # multipass: та сама cloud-init конфігурація на
+  локальній VM
+  Тоді рецензент без акаунта Hetzner теж зможе запустити --local. Реальний
+  Funnel URL і реальний tailscale ssh у локальному режимі працюють так само.
+
+  Що і як перевіряється
+
+  ┌─────────────────┬──────────────────────────────────────────┬───────────┐
+  │ Вимога завдання │                Перевірка                 │   Без     │
+  │                 │                                          │  Hetzner  │
+  ├─────────────────┼──────────────────────────────────────────┼───────────┤
+  │                 │ https://ghost-blog.tailbbeca6.ts.net     │           │
+  │ Ghost працює    │ відкривається з телефона з вимкненим     │ ✅        │
+  │                 │ Tailscale і на мобільному інтернеті,     │           │
+  │                 │ тобто ззовні tailnet                     │           │
+  ├─────────────────┼──────────────────────────────────────────┼───────────┤
+  │ Доступ лише     │ на VM ss -tlnp показує тільки 127.0.0.1  │           │
+  │ через тунель    │ і Tailscale; nc -z <IP VM> 22 та :2368   │ ✅        │
+  │                 │ не з'єднуються                           │           │
+  ├─────────────────┼──────────────────────────────────────────┼───────────┤
+  │ Немає           │ systemctl is-enabled ssh → masked, ufw   │ ✅        │
+  │ публічного SSH  │ status → deny incoming                   │           │
+  ├─────────────────┼──────────────────────────────────────────┼───────────┤
+  │ Адмінський      │ tailscale ssh root@ghost-blog працює     │ ✅        │
+  │ доступ          │                                          │           │
+  ├─────────────────┼──────────────────────────────────────────┼───────────┤
+  │                 │ один запуск команди без ручних кроків,   │           │
+  │ One click       │ owner-акаунт Ghost створюється           │ ✅        │
+  │                 │ автоматично                              │           │
+  ├─────────────────┼──────────────────────────────────────────┼───────────┤
+  │ Прибирання      │ ./destroy.sh видаляє VM                  │ ✅        │
+  ├─────────────────┼──────────────────────────────────────────┼───────────┤
+  │ Hetzner Cloud   │ лише перевірка коду; є також             │ ⚠️ не на  │
+  │ Firewall без    │ hcloud-заглушка, яка показує, які        │ реальному │
+  │ inbound-правил  │ команди скрипт викликав би               │  API      │
+  ├─────────────────┼──────────────────────────────────────────┼───────────┤
+  │ Скрипти без     │ shellcheck, cloud-init schema, docker    │ ✅        │
+  │ помилок         │ compose config                           │           │
+  └─────────────────┴──────────────────────────────────────────┴───────────┘
+
+  У README чесно напишемо: «verified locally on a Multipass VM with the same
+  cloud-init; hcloud calls not executed against a real Hetzner account».
+
+  Що треба від вас
+
+  1. Встановити інструменти: brew install multipass shellcheck hcloud. Для
+     multipass потрібен пароль адміністратора Mac. Ресурси є: Mac на Apple
+     Silicon, 16 GB RAM і 74 GB вільного диска. VM займе приблизно 2 GB RAM і 10
+     GB диска.
+  2. Перевірити auth key у консолі Tailscale: тег tag:ghost, pre-approved, і
+     додати ACL, який я наводив вище.
+     - Ключ одноразовий, тому після тестового запуску знадобиться новий.
+     - Якщо додати --ephemeral, VM сама зникне з tailnet після видалення.
+  3. Сказати «так». Тоді я напишу deploy.sh (обидва режими), destroy.sh,
+     cloud-init.yaml і .env.example, проганяю локальний деплой і заповню README
+     реальними результатами.
+
+  Починаємо?
+
+❯ окей як локально перевірити
+
+⏺ Спершу напишу скрипти, бо перевіряти поки нічого. Паралельно поставлю
+  shellcheck і hcloud: вони ставляться через brew без пароля. multipass потребує
+  пароля адміністратора, тож його доведеться поставити вам.
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+⏺ Background command "Install shellcheck and hcloud CLI via Homebrew" completed
+(exit code 0)
+
+⏺ Обидва образи мають arm64-версії, тож беру ARM-сервер Hetzner cax11, щоб
+  архітектура збігалася з локальною VM на вашому Mac. Далі пишу файли.
+
+⏺ Write(lib.sh)  ⎿  Wrote 84 lines to lib.sh
+       1 # Shared helpers for deploy.sh, verify.sh and destroy.sh. Not me
+         ant to be executed directly.
+       2 # shellcheck shell=bash
+       3
+       4 log()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
+       5 ok()   { printf '\033[1;32mPASS\033[0m %s\n' "$*"; }
+       6 fail() { printf '\033[1;31mFAIL\033[0m %s\n' "$*"; }
+       7 die()  { printf '\033[1;31mERROR\033[0m %s\n' "$*" >&2; exit 1;
+         }
+       8
+     … +76 lines (ctrl+o to expand)
+
+⏺ Write(cloud-init.yaml)
+  ⎿  Wrote 100 lines to cloud-init.yaml
+       1 #cloud-config
+       2 # Template rendered by deploy.sh with envsubst. Only ${TS_AUTHKE
+         Y}, ${SERVER_NAME} and
+       3 # ${GHOST_URL} are substituted; every other ${...} is left for D
+         ocker Compose / bash.
+       4 #
+       5 # Result: Ghost + MySQL in Docker, Ghost bound to 127.0.0.1 only
+         , published to the internet
+       6 # through Tailscale Funnel. No inbound ports: sshd is masked and
+          ufw denies all incoming traffic.
+     … +94 lines (ctrl+o to expand)
+
+⏺ Write(deploy.sh)
+  ⎿  Wrote 101 lines to deploy.sh
+       1 #!/usr/bin/env bash
+       2 # One-click Ghost deployment with no public SSH: the server has
+         no open inbound ports and is
+       3 # reachable only through Tailscale (Funnel for the public blog,
+         Tailscale SSH for admins).
+       4 #
+       5 # Usage:
+       6 #   ./deploy.sh           create a Hetzner Cloud VPS (needs HCLO
+         UD_TOKEN in .env)
+       7 #   ./deploy.sh --local   create a local Multipass VM from the s
+     … +95 lines (~5 KB) (ctrl+o to expand)
+
+⏺ Write(verify.sh)
+  ⎿  Wrote 57 lines to verify.sh
+       1 #!/usr/bin/env bash
+       2 # Checks a deployed server against the requirements. Called by d
+         eploy.sh; can be re-run any time.
+       3 #
+       4 # Usage:
+       5 #   ./verify.sh           verify the Hetzner server
+       6 #   ./verify.sh --local   verify the local Multipass VM
+       7 set -euo pipefail
+       8 cd "$(dirname "$0")"
+       9 # shellcheck source=lib.sh
+     … +48 lines (ctrl+o to expand)
+
+⏺ Write(destroy.sh)
+  ⎿  Wrote 46 lines to destroy.sh
+       1 #!/usr/bin/env bash
+       2 # Deletes everything deploy.sh created: the server, its firewall
+          and its tailnet device.
+       3 #
+       4 # Usage:
+       5 #   ./destroy.sh [--yes]           delete the Hetzner server and
+          firewall
+       6 #   ./destroy.sh --local [--yes]   delete the local Multipass VM
+       7 set -euo pipefail
+       8 cd "$(dirname "$0")"
+     … +38 lines (ctrl+o to expand)
+
+⏺ Write(.env.example)
+  ⎿  Wrote 17 lines to .env.example
+      1 # Copy to .env and fill in. .env is gitignored — never commit rea
+        l values.
+      2
+      3 # --- Required ---
+      4 # Tailscale auth key: Settings → Keys → Generate auth key. Single
+        -use, pre-approved, tag: tag:ghost.
+      5 TS_AUTHKEY=tskey-auth-xxxxxxxxxxxx
+      6 # Your tailnet's MagicDNS suffix (DNS page of the admin console,
+        or: tailscale status --json | jq -r .MagicDNSSuffix)
+      7 TS_TAILNET_DNS=tailxxxxxx.ts.net
+     … +10 lines (ctrl+o to expand)
+
+⏺ Bash(cd /Users/admin/fullstack-dev-test-task/task2-ghost-hetzner && printf
+      '.env\n.ghost-admin-credentials\n' > .gitignore && chmod +x deploy.sh
+      verify.sh destroy.sh…)
+  ⎿  Updated .gitignore (+1 -0)
+      1  .env
+      2 +.ghost-admin-credentials                                        
+  ⎿  … 3 more files changed
+
+⏺ ShellCheck дав дрібні зауваження, але один баг справжній: envsubst підставив
+  TS_AUTHKEY у коментар шапки cloud-init.yaml, і ключ потрапив би в user-data.
+  Виправляю це зараз.
+
+⏺ Bash(python3 -I - <<'EOF'
+      import re…)
+  ⎿  Updated cloud-init.yaml (+2 -2)
+      1  #cloud-config
+      2 -# Template rendered by deploy.sh with envsubst. Only ${TS_AUTHKE
+        -Y}, ${SERVER_NAME} and                                          
+      3 -# ${GHOST_URL} are substituted; every other ${...} is left for D
+        -ocker Compose / bash.                                           
+      2 +# Template rendered by deploy.sh with envsubst. Only the variabl
+        +es TS_AUTHKEY, SERVER_NAME and                                  
+      3 +# GHOST_URL are substituted; every other dollar-brace reference 
+        +is left for Docker Compose / bash.                              
+      4  #
+      5  # Result: Ghost + MySQL in Docker, Ghost bound to 127.0.0.1 only
+         , published to the internet
+      6  # through Tailscale Funnel. No inbound ports: sshd is masked and
+          ufw denies all incoming traffic.
+  ⎿  Updated lib.sh (+1 -0)
+      1  # Shared helpers for deploy.sh, verify.sh and destroy.sh. Not me
+         ant to be executed directly.
+      2  # shellcheck shell=bash
+      3 +# shellcheck disable=SC2034  # variables set here are used by th
+        +e scripts that source this file                                 
+      4  
+      5  log()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
+      6  ok()   { printf '\033[1;32mPASS\033[0m %s\n' "$*"; }
+  ⎿  Updated verify.sh (+2 -0)
+      35  done
+      36  
+      37  # 3. Inside the server (reached only through Tailscale SSH — wh
+          ich itself proves admin access works).
+      38 +# The remote commands below are single-quoted on purpose: they 
+         +are expanded on the server.                                    
+      39 +# shellcheck disable=SC2016                                    
+      40  remote() { tailscale ssh "root@$SERVER_NAME" "$@" 2>/dev/null; 
+          }
+      41  DESC="admin shell via Tailscale SSH works"
+      42  check remote true
+
+⏺ Директиву ShellCheck переношу на наступний рядок, бо вона діє лише на нього.
+  Також знайшов баг: check ! tcp_open завжди давав би FAIL, бо bash у "$@"
+  сприймає ! як ім'я команди.
+
+⏺ Bash(python3 -I - <<'EOF'
+      p="verify.sh"; s=open(p).read()…)
+  ⎿  Updated verify.sh (+4 -2)
+      29  # 2. Nothing answers on the server's own public IP.
+      30  ip="$(public_ip)"
+      31  [[ -n "$ip" ]] || die "server '$SERVER_NAME' not found"
+      32 +port_closed() { ! tcp_open "$ip" "$1"; }                       
+      33  for port in 22 80 443 2368; do
+      34    DESC="port $port on public IP $ip is closed"
+      34 -  check ! tcp_open "$ip" "$port"                               
+      35 +  check port_closed "$port"                                    
+      36  done
+      37  
+      38  # 3. Inside the server (reached only through Tailscale SSH — wh
+          ich itself proves admin access works).
+      39  # The remote commands below are single-quoted on purpose: they 
+          are expanded on the server.
+      39 -# shellcheck disable=SC2016                                    
+      40  remote() { tailscale ssh "root@$SERVER_NAME" "$@" 2>/dev/null; 
+          }
+      41  DESC="admin shell via Tailscale SSH works"
+      42  check remote true
+      43  
+      44  DESC="sshd is masked (ssh.socket and ssh.service)"
+      45 +# shellcheck disable=SC2016                                    
+      46  check remote '[ "$(systemctl is-enabled ssh.socket ssh.service 
+          | sort -u)" = masked ]'
+      47  
+      48  DESC="ufw is active and denies incoming traffic"
+     ...
+      50  
+      51  # Every TCP listener must be on loopback or on the tailnet addr
+          ess.
+      52  DESC="no TCP service listens on a public interface"
+      53 +# shellcheck disable=SC2016                                    
+      54  check remote '! ss -tlnH | awk "{print \$4}" | grep -vE "^(127\
+          .|\[::1\]|100\.|\[fd7a:)"'
+      55  
+      56  echo
+
+⏺ Перевірка відкритого порту не спрацювала: має виводитися «open port detected»,
+  а цього рядка немає. Розбираюся:
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ У macOS nc після -G стоїть табуляція, а не пробіл, тож моя перевірка прапорця
+  її не бачила. Виправляю.
+
+⏺ Bash(sed -i '' "s/grep -q -- ' -G '/grep -qE -- '^[[:space:]]+-G '/" lib.sh &&
+      grep -n 'grep -qE' lib.sh && shellcheck -x lib.sh verify.sh && source
+      ./lib.sh && pyth…)
+  ⎿  Updated lib.sh (+1 -1)
+      77  
+      78  # True if a TCP connection to host:port succeeds within 5 s.
+      79  tcp_open() {
+      80 -  if nc -h 2>&1 | grep -q -- ' -G '; then                      
+      80 +  if nc -h 2>&1 | grep -qE -- '^[[:space:]]+-G '; then         
+      81      nc -z -G 5 -w 5 "$1" "$2" >/dev/null 2>&1   # macOS nc: -G 
+          is the connect timeout
+      82    else
+      83      nc -z -w 5 "$1" "$2" >/dev/null 2>&1
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Скрипти написано, і все, що можна перевірити без VM, перевірено. Щоб запустити
+  локальний деплой, потрібні ще дві речі від вас.
+
+  Що є в task2-ghost-hetzner/
+
+  Файл: deploy.sh
+  Призначення: Один клік. ./deploy.sh створює firewall і сервер на Hetzner,
+    ./deploy.sh --local запускає VM у Multipass. Далі скрипт чекає, поки сервер
+    з'явиться в tailnet і Ghost почне відповідати. Потім сам створює
+  owner-акаунт
+     Ghost (пароль кладе в .ghost-admin-credentials) і запускає перевірки.
+  ────────────────────────────────────────
+  Файл: cloud-init.yaml
+  Призначення: Налаштування сервера. Спочатку ufw забороняє вхідні з'єднання й
+    вимикається sshd, потім сервер підключається до Tailscale з --ssh, піднімає
+    Ghost і MySQL (Ghost слухає тільки 127.0.0.1) і вмикає Funnel.
+  ────────────────────────────────────────
+  Файл: verify.sh
+  Призначення: Перевіряє вимоги: блог доступний з інтернету через Funnel; порти
+    22, 80, 443 і 2368 на публічній IP закриті; адмінський доступ через
+  Tailscale
+     SSH працює; sshd вимкнено (masked); ufw активний; немає жодного TCP-сервісу
+
+    на публічному інтерфейсі.
+  ────────────────────────────────────────
+  Файл: destroy.sh
+  Призначення: Видаляє сервер і firewall, а також прибирає сервер із tailnet.
+  ────────────────────────────────────────
+  Файл: lib.sh, .env.example, .gitignore
+  Призначення: Спільні функції, шаблон налаштувань, захист .env і пароля Ghost
+    від потрапляння в git.
+
+  Вже перевірено:
+  - ShellCheck не має зауважень до жодного скрипту.
+  - cloud-init після підстановки змінних — валідний YAML, а compose-файл
+    проходить docker compose config.
+  - Перевірка портів правильно розрізняє відкритий, закритий і заблокований
+    firewall'ом порт. Заблокований — це якраз випадок Hetzner Firewall.
+  - Під час перевірок я знайшов і виправив три баги:
+    - auth key потрапляв у коментар cloud-init;
+    - перевірка закритих портів завжди давала FAIL;
+    - на macOS не працювало розпізнавання прапорця nc -G.
+
+  Ще не перевірено: повний деплой. Його не можна запустити без VM.
+
+  Що зробити вам
+
+  1. Встановити Multipass: brew install --cask multipass. Інсталятор попросить
+     пароль від Mac, тому мені звідси його не поставити.
+  2. У консолі Tailscale:
+     - Access controls: додайте tagOwners для tag:ghost, nodeAttrs з funnel і
+       ssh-правило з "action": "accept" (JSON — у моєму першому повідомленні про
+       Tailscale). Саме accept: з check скрипт не зможе виконувати команди без
+       браузера.
+     - Keys: ключ у .env має бути з тегом tag:ghost і pre-approved. Якщо тегу
+       немає, створіть новий ключ уже після того, як збережете ACL, і замініть
+       TS_AUTHKEY у task2-ghost-hetzner/.env.
+  3. Напишіть мені, і я запущу ./deploy.sh --local. Це займе 5–10 хвилин. Ключ
+     одноразовий, тому для кожного наступного запуску знадобиться новий.
+
+  Під час запуску з'ясується кілька моментів, у яких я не впевнений:
+  - як Multipass поведеться, коли sshd вимкнеться посеред cloud-init;
+  - чи правильно Ghost сприймає HTTPS за Funnel (без циклу редиректів);
+  - чи прибирає tailscale logout сервер із tailnet.
+
+  Якщо щось піде не так, виправлю й покажу вивід.
+
+❯ давай я споачтку закомічу перше завдання
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+⏺ Task 1 уже закомічено. Зміни в backend/ і frontend/, які були на початку
+  сесії, тепер у чотирьох нових комітах, від e1845bb до 7b34346, і в робочому
+  дереві від Task 1 нічого не лишилося. Робили ви це самі чи в іншій сесії —
+  неважливо: незакомічених змін від Task 1 немає.
+
+  Зараз git status показує лише дві нові папки:
+  ?? ai-conversations/       ← транскрипт Task 1
+  ?? task2-ghost-hetzner/    ← скрипти Task 2 (ще не протестовані)
+
+  Що з ними робити:
+  - ai-conversations/ можна закомітити вже зараз, якщо хочете, щоб він ішов
+    разом із Task 1. Пам'ятайте: кореневий README досі посилається на
+    02-task1-rbac-agent.md, а файл називається інакше. Поправте посилання або в
+    цьому ж коміті, або пізніше.
+  - task2-ghost-hetzner/ раджу закомітити після локального тесту, щоб у коміті
+    був код, який точно працює.
+
+  Секрети туди не потраплять, навіть якщо зробите git add .:
+  task2-ghost-hetzner/.env ігнорується (!! у статусі), і кореневий .env зараз
+  такий самий, як у коміті.
+
+  Скажіть, коли поставите Multipass і налаштуєте ACL, тоді запущу ./deploy.sh
+  --local.
+
+❯ ?? ai-conversations/       ← транскрипт Task 1
+
+  додай в коміт і поправ посилання
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(~/fullstack-dev-test-task/README.md)
+  ⎿  Added 1 line, removed 1 line
+      13  └── ai-conversations/          # AI transcripts
+      14  ```
+      15  
+      16 -**AI usage.** Both tasks were done with AI tools, as allowed by
+         - the assignment. Transcripts are in [ai-conversations/](ai-conv
+         -ersations/): `01-planning.md` (analysing the task, choosing the
+         - approach, preparing agent prompts), `02-task1-rbac-agent.md` (
+         -implementation of task 1), `03-task2-ghost-agent.md` (implement
+         -ation of task 2). The AI agent wrote most of the code. I define
+         -d the requirements and design decisions, reviewed each phase, a
+         -nd verified the results locally.                               
+      16 +**AI usage.** Both tasks were done with AI tools, as allowed by
+         + the assignment. Transcripts are in [ai-conversations/](ai-conv
+         +ersations/): [implementation of task 1](ai-conversations/2026-1
+         +1-09-context-you-are-a-senior-full-stack-engineer-worki.txt). T
+         +he AI agent wrote most of the code. I defined the requirements 
+         +and design decisions, reviewed each phase, and verified the res
+         +ults locally.                                                  
+      17  
+      18  **Time spent.** Task 1: ~1.5 h (see [NOTES.md](NOTES.md#time-sp
+          ent)) · Task 2: ~<Y> h. Scope cuts and trade-offs: [NOTES.md](N
+          OTES.md), [task2-ghost-hetzner/README.md#limitations](task2-gho
+          st-hetzner/README.md#limitations).
+      19  
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Закомітив транскрипт і виправлене посилання: b1d5429 docs: add the task 1 AI
+  transcript and link it from the README.
+
+  У README.md (README.md#L16) я замінив три неіснуючі назви файлів на посилання
+  на справжній транскрипт Task 1. Описи 01-planning і 03-task2-ghost-agent
+  прибрав, бо цих файлів поки немає. Коли експортуєте їх, допишемо посилання в
+  цей самий рядок.
+
+  У робочому дереві лишилася тільки task2-ghost-hetzner/. Її закомітимо після
+  локального тесту. Для тесту, як і раніше, потрібні Multipass і налаштування
+  ACL в Tailscale.
+
+❯ я не можу створити акаунт на hetzner, тому треба виконати друге завдання по
+  іншому. скажи як
+
+⏺ Пропоную так: скрипт лишається для Hetzner, а все, що відбувається всередині
+  сервера, перевіряємо на локальній віртуальній машині. Скрипти під це вже
+  написано, у deploy.sh є режим --local.
+
+  Суть підходу
+
+  Сервер на Hetzner — це Ubuntu 24.04, яку налаштовує файл cloud-init.yaml.
+  Multipass запускає на вашому Mac той самий образ Ubuntu 24.04 з тим самим
+  файлом. Отже, по-справжньому перевіряється вся суть завдання:
+  - Ghost працює;
+  - SSH вимкнено, вхідні порти закриті;
+  - блог доступний з інтернету тільки через тунель Tailscale Funnel;
+  - адмінський доступ працює тільки через Tailscale SSH.
+
+  Не перевіряються лише ті частини deploy.sh, що звертаються до Hetzner API:
+  створення firewall і сервера. Це кілька простих команд hcloud, і в README ми
+  прямо напишемо, що з реальним API вони не запускалися.
+
+  Що зробити вам (≈10 хв)
+
+  1. Встановіть Multipass: brew install --cask multipass. Інсталятор попросить
+     пароль від Mac.
+  2. Tailscale → Access controls: додайте в policy file
+  "tagOwners": { "tag:ghost": ["autogroup:admin"] },
+  "nodeAttrs": [ { "target": ["tag:ghost"], "attr": ["funnel"] } ],
+  "ssh": [ { "action": "accept", "src": ["autogroup:admin"], "dst":
+  ["tag:ghost"], "users": ["root"] } ]
+     Якщо секції ssh чи nodeAttrs вже є, допишіть елементи в наявні масиви, а не
+     створюйте нові секції.
+  3. Tailscale → Settings → Keys: згенеруйте новий auth key для тестів з такими
+     параметрами:
+     - Reusable, щоб не створювати новий ключ на кожен запуск;
+     - Ephemeral, щоб VM сама зникала з tailnet після видалення;
+     - Pre-approved;
+     - Tags: tag:ghost;
+     - термін дії 1 день.
+
+     Вставте ключ у task2-ghost-hetzner/.env замість TS_AUTHKEY.
+  4. Напишіть мені «готово».
+
+  Що зроблю я
+
+  1. Запущу ./deploy.sh --local. Розгортання займе 5–10 хвилин. Якщо щось впаде,
+     виправлю й перезапущу.
+  2. verify.sh перевірить:
+     - блог відкривається з інтернету через Funnel;
+     - порти 22, 80, 443 і 2368 закриті;
+     - Tailscale SSH працює;
+     - sshd вимкнено, ufw активний.
+
+     Ви додатково відкриєте блог з телефона з вимкненим Tailscale.
+  3. Перевірю ./destroy.sh --local.
+  4. Заповню README:
+     - справжній вивід перевірок;
+     - чесний розділ «Verification»: що перевірено на VM, а що не запускалося на
+       Hetzner;
+     - Limitations і Alternatives.
+  5. Закомічу Task 2 і впишу час у кореневий README.
+
+  Паралельно варто написати рекрутеру одне речення:
+
+  ▎ «I couldn't register a Hetzner account, so I verified the deployment on a
+  ▎ local Ubuntu 24.04 VM with the same cloud-init; the Hetzner API part is
+  ▎ implemented but not run.»
+
+  Так ви покажете, що бачите обмеження і свідомо його обійшли.
+❯ {
+          // Tags that can be applied to devices, and who can apply them.
+          "tagOwners": {
+                  "tag:ghost": ["autogroup:admin"],
+          },
+
+  // Allow devices tagged tag:ghost to publish services via Tailscale Funnel.
+  "nodeAttrs": [
+          {"target": ["tag:ghost"], "attr": ["funnel"]},
+  ],
+
+  // Allow all connections inside the tailnet (default).
+  "grants": [
+          {"src": ["*"], "dst": ["*"], "ip": ["*"]},
+  ],
+
+  // Who can use Tailscale SSH.
+  "ssh": [
+          // Default: users can SSH into their own devices in check mode.
+          {
+                  "action": "check",
+                  "src":    ["autogroup:member"],
+                  "dst":    ["autogroup:self"],
+                  "users":  ["autogroup:nonroot", "root"],
+          },
+          // Ghost server: members of the tailnet can SSH in as root.
+          {
+                  "action": "accept",
+                  "src":    ["autogroup:member"],
+                  "dst":    ["tag:ghost"],
+                  "users":  ["root"],
+          },
+  ],
+  }
+  зараз ось такий tailscale
+
+⏺ Політика правильна. У ній є все потрібне:
+  - tagOwners для tag:ghost;
+  - атрибут funnel для серверів із цим тегом;
+  - ssh з accept до tag:ghost під root, тож команди через tailscale ssh
+    виконуватимуться без підтвердження в браузері;
+  - grants дозволяє ваш ноутбук доходити до сервера всередині tailnet.
+
+  Можна посилити безпеку, але це необов'язково: autogroup:member замінити на
+  autogroup:admin, і тоді на сервер зможуть заходити лише адміни tailnet. У
+  tailnet, де ви єдиний користувач, різниці немає.
+
+  Перевіряю, чи готове решта:
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Ще не все готово:
+
+  Що: ACL Tailscale
+  Стан: ✅ правильний
+  ────────────────────────────────────────
+  Що: TS_TAILNET_DNS
+  Стан: ✅ tailbbeca6.ts.net
+  ────────────────────────────────────────
+  Що: Multipass
+  Стан: ❌ не встановлено
+  ────────────────────────────────────────
+  Що: TS_AUTHKEY
+  Стан: ⚠️ Це той самий ключ, що був о 16:00, створений ще до того, як у ACL
+    з'явився tag:ghost. Тому, найімовірніше, він без тегу. Тоді сервер увійде в
+    tailnet як ваш звичайний пристрій, і на нього не подіють ні Funnel, ні
+    SSH-правило.
+
+  Що зробити:
+
+  1. Виконайте в терміналі brew install --cask multipass і введіть пароль від
+     Mac.
+  2. Відкрийте Tailscale → Settings → Keys → Generate auth key:
+     - Reusable: так;
+     - Expiration: 1 день;
+     - Ephemeral: так, тоді VM сама зникне з tailnet після видалення;
+     - Pre-approved: так;
+     - Tags: увімкнути й вибрати tag:ghost.
+
+     Старий ключ можна відкликати (Revoke) там само.
+  3. Замініть значення TS_AUTHKEY= у файлі task2-ghost-hetzner/.env на новий
+     ключ.
+  4. Напишіть «готово», і я запущу ./deploy.sh --local.
+
+
+❯ запусти
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Multipass встановлено (1.16.4), але .env не змінювався з 16:00, тобто ключ у
+  ньому досі старий. Запускати з ним не раджу. Старий ключ створено ще до появи
+  tag:ghost в ACL. Без тегу сервер не отримає дозвіл на Funnel, і деплой
+  чекатиме 10 хвилин, а потім впаде. Якщо ключ одноразовий, він при цьому ще й
+  згорить.
+
+  Що зробити:
+  1. Tailscale → Settings → Keys → Generate auth key з параметрами Reusable,
+     Ephemeral, Pre-approved, Tags: tag:ghost, термін дії 1 день.
+  2. Відкрийте файл:
+  open -e ~/fullstack-dev-test-task/task2-ghost-hetzner/.env
+     Замініть значення в рядку TS_AUTHKEY=... на новий ключ і збережіть (Cmd+S).
+  3. Напишіть «запусти» ще раз, і я одразу стартую.
+
+  Якщо ви вже створювали ключ із тегом tag:ghost і саме він лежить у .env,
+  напишіть «ключ з тегом». Тоді запущу з поточним.
+
+❯ ключ правильний, давай запускай
+
+⏺ Запускаю ./deploy.sh --local у фоні. Розгортання займе 5–10 хвилин: VM,
+  встановлення пакетів, Tailscale, завантаження образів Ghost і MySQL,
+  ініціалізація бази.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Деплой запущено у фоні. Коли він завершиться, я отримаю сповіщення і покажу
+  результат. Якщо щось впаде, розберуся й виправлю.
+
+  Поки деплой іде, у консолі Tailscale на сторінці Machines має з'явитися
+  пристрій ghost-blog з тегом tag:ghost, зазвичай через 2–4 хвилини після
+  старту.
+
+⏺ Background command "Deploy Ghost to a local Multipass VM" completed (exit code
+0)
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Деплой зупинився на першому кроці: Multipass не створив VM, а exit code 0
+  оманливий через tee. Далі перевірю, що саме пішло не так.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Multipass не завантажив образ Ubuntu за відведені 120 секунд, тому запуск
+  скасувався, і я збільшую таймаут. Далі переведу локальний режим на фоновий
+  запуск із довгим очікуванням, а готовність перевірятиму через Tailscale.
+
+⏺ Update(deploy.sh)
+  ⎿  Added 14 lines, removed 6 lines
+      51      --name "$SERVER_NAME" --type "$SERVER_TYPE" --image ubuntu-
+          24.04 --location "$LOCATION" \
+      52      --firewall "$FIREWALL_NAME" --user-data-from-file "$USER_DA
+          TA" --label app=ghost >/dev/null
+      53  else
+      54 -  log "Launching Multipass VM (Ubuntu 24.04, same cloud-init)" 
+      55 -  # Multipass waits for cloud-init over SSH, but cloud-init mas
+         -ks sshd, so `launch` may report a                              
+      56 -  # timeout. That is expected: from here on we only talk to the
+         - VM through Tailscale.                                         
+      54 +  log "Launching Multipass VM (Ubuntu 24.04, same cloud-init; t
+         +he first run downloads the image)"                             
+      55 +  # `multipass launch` waits for cloud-init over SSH, but cloud
+         +-init masks sshd, so the command                               
+      56 +  # may never report success. Run it in the background and trac
+         +k progress through Tailscale.                                  
+      57 +  LAUNCH_LOG="$(mktemp)"                                       
+      58    multipass launch 24.04 --name "$SERVER_NAME" --cpus 2 --memor
+          y 2G --disk 10G \
+      58 -    --cloud-init "$USER_DATA" --timeout 120 >/dev/null 2>&1 \  
+      59 -    || multipass info "$SERVER_NAME" >/dev/null 2>&1 \         
+      60 -    || die "multipass could not create the VM"                 
+      59 +    --cloud-init "$USER_DATA" --timeout 1800 >"$LAUNCH_LOG" 2>&
+         +1 &                                                            
+      60 +  launch_pid=$!                                                
+      61 +  trap 'rm -f "$USER_DATA" "$LAUNCH_LOG"; kill "$launch_pid" 2>
+         +/dev/null || true' EXIT                                        
+      62 +  for _ in $(seq 360); do                                      
+      63 +    multipass info "$SERVER_NAME" >/dev/null 2>&1 && break     
+      64 +    kill -0 "$launch_pid" 2>/dev/null || break                 
+      65 +    sleep 5                                                    
+      66 +  done                                                         
+      67 +  multipass info "$SERVER_NAME" >/dev/null 2>&1 \              
+      68 +    || die "multipass could not create the VM: $(cat "$LAUNCH_L
+         +OG")"                                                          
+      69  fi
+      70  log "Server created, public IP: $(public_ip)"
+      71  
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Перезапускаю. Тепер код виходу буде справжній:
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Деплой перезапущено. Перший раз довше: Multipass спершу має завантажити образ
+  Ubuntu, а це кілька хвилин залежно від інтернету. Повідомлю результат, щойно
+  він завершиться.
+
+❯ подивись прогрес
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Майже все готово: сервер у tailnet із тегом tag:ghost, Ghost запущено,
+  owner-акаунт створено, SSH через Tailscale працює, sshd вимкнено, ufw
+  увімкнено. Не пройшла лише перевірка публічного доступу через Funnel, тож
+  зараз дивлюся, що з ним.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Background command "Re-run local deploy with fixed launch handling" failed
+with exit code 1
+
+⏺ Деплой знову впав із кодом 1 на тій самій перевірці Funnel, хоча Funnel і
+  Ghost на сервері працюють; ймовірно, перевірка спрацювала раніше, ніж з'явився
+  публічний вхід. Перечитую кінець логу й повторюю перевірку.
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+⏺ Через tailnet блог відповідає (HTTP 200), а через публічний Funnel з'єднання
+  обривається під час TLS-рукостискання. Перевіряю, з якого боку проблема.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Сервер дозволяє Funnel, тож блокування, імовірно, через ufw, який відхиляє
+  вхідний трафік на інтерфейсі tailscale0. Перевірю це.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Гіпотеза не спрацювала: Tailscale пропускає трафік на tailscale0 до правил
+  ufw, а заблокованих пакетів у журналі немає. Далі перевірю шлях від вашого
+  Mac, підключившись до трьох публічних IP Funnel з Mac і з самої VM.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Тепер HTTP 200 проходить через усі три публічні IP Funnel, і з Mac, і з VM.
+  Публічну перевірку повторю до 5 хвилин, бо вхід Funnel вмикається з затримкою,
+  а порожній «public IP:» друкуватиму пізніше.
+
+⏺ Update(verify.sh)
+  ⎿  Added 8 lines, removed 2 lines
+      19  # 1. The blog is public: resolve the name via public DNS so the
+           request goes over the internet
+      20  #    to Tailscale Funnel, not through this machine's tailnet co
+          nnection.
+      21  funnel_ip="$(dig +short @1.1.1.1 "$GHOST_HOST" A | tail -n1)"
+      22 +# The public Funnel endpoint can take a few minutes to start an
+         +swering after `tailscale funnel`.                              
+      23  public_blog() {
+      23 -  [[ -n "$funnel_ip" ]] &&                                     
+      24 -    curl -fsS -o /dev/null --max-time 15 --resolve "$GHOST_HOST
+         -:443:$funnel_ip" "$GHOST_URL/"                                 
+      24 +  [[ -n "$funnel_ip" ]] || return 1                            
+      25 +  local _                                                      
+      26 +  for _ in $(seq 60); do                                       
+      27 +    curl -fsS -o /dev/null --max-time 15 --resolve "$GHOST_HOST
+         +:443:$funnel_ip" "$GHOST_URL/" 2>/dev/null && return 0         
+      28 +    sleep 5                                                    
+      29 +  done                                                         
+      30 +  return 1                                                     
+      31  }
+      32  DESC="blog is reachable from the internet via Tailscale Funnel 
+          ($GHOST_HOST → ${funnel_ip:-no public DNS record})"
+      33  check public_blog
+
+⏺ Update(deploy.sh)
+  ⎿  Added 1 line, removed 1 line
+      67    multipass info "$SERVER_NAME" >/dev/null 2>&1 \
+      68      || die "multipass could not create the VM: $(cat "$LAUNCH_L
+          OG")"
+      69  fi
+      70 -log "Server created, public IP: $(public_ip)"                  
+      70  
+      71  # --- Wait until the server has joined the tailnet and Ghost an
+          swers ----------------------------
+      72  log "Waiting for the server to join the tailnet (usually 2–4 mi
+          n)"
+      73  for _ in $(seq 120); do in_tailnet && break; sleep 5; done
+      74  in_tailnet || die "server did not join the tailnet in 10 min — 
+          check the auth key and ACL (README → Troubleshooting)"
+      75 +log "Server is in the tailnet; its public IP is $(public_ip)"  
+      76  
+      77  log "Waiting for Ghost at $GHOST_URL (image pulls + DB init, us
+          ually 2–5 min)"
+      78  for _ in $(seq 120); do
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Усі 9 перевірок на VM пройшли. Далі перевірю, чи пускає адмінка Ghost з
+  автоматично створеними обліковими даними, і чи не вимагає вона код з пошти,
+  якого ми не отримаємо, бо SMTP не налаштовано.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Вхід в адмінку вже працює: сесія створюється без підтвердження поштою, і Ghost
+  6.75 відповідає на правильній адресі. Далі запускаю повний цикл із
+  виправленими скриптами, щоб переконатися, що чистий деплой проходить без FAIL.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Поточний прогрес такий.
+
+  Перший повний деплой спрацював. Пройшли всі вимоги:
+  - блог доступний з інтернету через Funnel за адресою
+    https://ghost-blog.tailbbeca6.ts.net (HTTP 200 через усі три публічні IP
+    Funnel);
+  - на IP самої VM закриті порти 22, 80, 443 і 2368;
+  - SSH працює тільки через Tailscale; sshd вимкнено (masked), ufw активний;
+  - немає жодного TCP-сервісу на публічному інтерфейсі;
+  - адмінка Ghost пускає з автоматично створеними обліковими даними.
+
+  Дорогою виправив три проблеми:
+  1. Multipass не встигав завантажити образ Ubuntu за 120 секунд. Тепер запуск
+     іде у фоні з таймаутом 30 хвилин.
+  2. Публічний вхід Funnel вмикається з затримкою в кілька хвилин, і перевірка
+     падала через те, що запускалася одразу. Тепер вона повторюється до 5
+     хвилин.
+  3. У виводі було порожнє «public IP:», тепер IP друкується після підключення
+     сервера до tailnet.
+
+  Зараз у фоні йде фінальний прогін: destroy.sh видаляє VM, а потім чистий
+  деплой одним запуском уже з виправленими скриптами. Якщо він пройде без
+  жодного FAIL, це й буде доказ «one click» для README.
+
+  Блог зараз недоступний, бо його якраз перестворює фінальний прогін. Коли той
+  завершиться, відкрийте https://ghost-blog.tailbbeca6.ts.net з телефона з
+  вимкненим Tailscale і на мобільному інтернеті. Так ви самі перевірите, що блог
+  доступний ззовні tailnet.
+
+⏺ Background command "Destroy the VM, then run a clean one-click deploy" failed
+with exit code 1
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ destroy.sh залишив пристрій ghost-blog у tailnet, бо tailscale logout,
+  запущений через nohup, вбивався разом із SSH-сесією. Тепер я запускатиму його
+  через systemd-run, щоб він не залежав від сесії.
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(destroy.sh)
+  ⎿  Added 5 lines, removed 4 lines
+      15    [[ "$answer" == "$SERVER_NAME" ]] || die "aborted"
+      16  fi
+      17  
+      18 -# Log the server out of Tailscale first, which removes it from 
+         -the tailnet. Best effort: it fails                             
+      19 -# harmlessly if the server is already gone. The logout runs det
+         -ached because it cuts our session.                             
+      18 +# Log the server out of Tailscale first, so it leaves the tailn
+         +et. Best effort: it fails harmlessly                           
+      19 +# if the server is already gone. The logout cuts our own SSH se
+         +ssion, so it runs as a transient                               
+      20 +# systemd unit (a plain background job would be killed together
+         + with the session).                                            
+      21  if command -v tailscale >/dev/null && in_tailnet; then
+      22    log "Removing '$SERVER_NAME' from the tailnet"
+      22 -  tailscale ssh "root@$SERVER_NAME" 'nohup sh -c "sleep 2; tail
+         -scale logout" >/dev/null 2>&1 &' 2>/dev/null || true           
+      23 -  sleep 5                                                      
+      23 +  tailscale ssh "root@$SERVER_NAME" 'systemd-run --on-active=2 
+         +--unit=ts-logout tailscale logout' >/dev/null 2>&1 || true     
+      24 +  for _ in $(seq 12); do in_tailnet || break; sleep 5; done    
+      25  fi
+      26  
+      27  if [[ "$MODE" == hetzner ]]; then
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Старий пристрій уже офлайн, тож Tailscale незабаром сам його прибере. Далі
+  запускаю повний цикл у фоні: чекаю зникнення пристрою, роблю чистий деплой,
+  виконую destroy.sh з виправленим logout і перевіряю tailnet.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Поки цикл триває, пишу README для Task 2, а реальний вивід перевірок вставлю
+  після його завершення. Цей прогін наприкінці видалить VM, тому пізніше я знову
+  підніму блог, щоб ви могли перевірити його з телефона.
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+⏺ Write(README.md)
+  ⎿  Added 160 lines, removed 33 lines
+        1  # Task 2 — One-click Ghost on Hetzner without public SSH
+        2  
+        3 -`./deploy.sh` creates a Hetzner Cloud VPS with **no open inbou
+          -nd ports**. The blog is published through Tailscale Funnel; ad
+          -min access is only possible via Tailscale SSH from my tailnet.
+        3 +`./deploy.sh` creates a Hetzner Cloud VPS that has **no open i
+          +nbound ports** and runs Ghost on it. Visitors reach the blog t
+          +hrough **Tailscale Funnel**. Admins get a shell only through *
+          +*Tailscale SSH** from the tailnet. Both are tunnels the server
+          + opens itself, as outbound connections.                       
+        4  
+        5 +> **Verification status.** I could not register a Hetzner acco
+          +unt, so the Hetzner path (`./deploy.sh`) has **not been run ag
+          +ainst the real Hetzner API**. Everything that happens on the s
+          +erver was verified end to end with `./deploy.sh --local`. That
+          + mode boots the same Ubuntu 24.04 cloud image with the same `c
+          +loud-init.yaml` in a local Multipass VM and goes through the r
+          +eal Tailscale tunnels. See [Verification](#verification).     
+        6 +                                                              
+        7  ## Architecture
+        8  
+        9  ```mermaid
+       10  flowchart LR
+        9 -  V[Visitors] -->|HTTPS| FN[Tailscale Funnel]                 
+       10 -  A[Admin laptop in tailnet] -->|Tailscale SSH| TS            
+       11 -  FN --> TS                                                   
+       12 -  subgraph VPS["Hetzner VPS — firewall: no inbound rules"]    
+       13 -    TS[tailscaled] --> G[Ghost 127.0.0.1:2368]                
+       14 -    G --> M[(MySQL 8)]                                        
+       11 +  V[Visitors] -->|HTTPS| FN[Tailscale Funnel<br/>public ingres
+          +s]                                                            
+       12 +  A[Admin laptop<br/>in the tailnet] -->|Tailscale SSH| TS    
+       13 +  FN -->|WireGuard| TS                                        
+       14 +  subgraph VPS["Hetzner VPS: Cloud Firewall with no inbound ru
+          +les, ufw deny incoming, sshd masked"]                         
+       15 +    TS[tailscaled] -->|127.0.0.1:2368| G[Ghost 6]             
+       16 +    G --> M[(MySQL 8.4)]                                      
+       17    end
+       18  ```
+       19  
+       18 -Both paths are outbound connections from the VPS to Tailscale,
+          - so nothing listens on the public IP. Defense in depth: Hetzne
+          -r Cloud Firewall (no inbound rules) + sshd disabled + ufw deny
+          - incoming + Ghost bound to localhost only.                    
+       20 +The server dials out to Tailscale, so nothing has to listen on
+          + its public IP. Four layers keep it that way:                 
+       21  
+       22 +| Layer | What it does |                                      
+       23 +|---|---|                                                     
+       24 +| Hetzner Cloud Firewall (`<name>-deny-inbound`) | No inbound 
+          +rules, so Hetzner drops every inbound packet before it reaches
+          + the VM |                                                     
+       25 +| `ufw default deny incoming` | Same rule inside the VM, in ca
+          +se the server is ever detached from the firewall |            
+       26 +| `systemctl mask ssh.socket ssh.service` | There is no SSH da
+          +emon to reach, even from inside the network |                 
+       27 +| Ghost published on `127.0.0.1:2368` only | Ghost is reachabl
+          +e only through `tailscaled` (Funnel / tailnet) |              
+       28 +                                                              
+       29 +## Files                                                      
+       30 +                                                              
+       31 +| File | Purpose |                                            
+       32 +|---|---|                                                     
+       33 +| [`deploy.sh`](deploy.sh) | The one click. It checks prerequi
+          +sites, renders cloud-init, creates the firewall and the server
+          + (or the local VM), waits for the tailnet and for Ghost, creat
+          +es the Ghost owner account, then runs `verify.sh` |           
+       34 +| [`cloud-init.yaml`](cloud-init.yaml) | Server bootstrap. Ord
+          +er: lock down inbound traffic → join the tailnet with `--ssh` 
+          +→ start Ghost + MySQL with Docker Compose → `tailscale funnel`
+          + |                                                            
+       35 +| [`verify.sh`](verify.sh) | Checks the deployed server agains
+          +t the requirements. Safe to re-run |                          
+       36 +| [`destroy.sh`](destroy.sh) | Logs the server out of the tail
+          +net and deletes the server and firewall (or the VM) |         
+       37 +| [`lib.sh`](lib.sh) | Shared helpers (argument parsing, `.env
+          +` loading, checks) |                                          
+       38 +| [`.env.example`](.env.example) | Configuration template |   
+       39 +                                                              
+       40  ## Prerequisites
+       41  
+       22 -- Local tools: `hcloud`, `curl`, `envsubst`, `nc` (<install co
+          -mmands>)                                                      
+       23 -- Hetzner Cloud project and API token (Read & Write)          
+       24 -- Tailscale account with MagicDNS and HTTPS certificates enabl
+          -ed                                                            
+       25 -- Tailscale ACL additions: <exact JSON snippet>               
+       26 -- Tailscale auth key: single-use, pre-approved, tag `tag:ghost
+          -`                                                             
+       42 +**Local tools.** The scripts are tested on macOS and should al
+          +so work on Linux.                                             
+       43  
+       44 +```bash                                                       
+       45 +# macOS                                                       
+       46 +brew install hcloud jq gettext            # gettext provides e
+          +nvsubst; curl, nc, dig, openssl ship with macOS               
+       47 +brew install --cask multipass             # only for ./deploy.
+          +sh --local                                                    
+       48 +# Debian/Ubuntu                                               
+       49 +sudo apt install jq gettext-base netcat-openbsd dnsutils curl 
+          +openssl   # + hcloud from https://github.com/hetznercloud/cli/
+          +releases                                                      
+       50 +```                                                           
+       51 +                                                              
+       52 +You also need the [Tailscale client](https://tailscale.com/dow
+          +nload), logged in to your tailnet on this machine.            
+       53 +                                                              
+       54 +**Hetzner.** A Cloud project and an API token with Read & Writ
+          +e access (Console → project → Security → API tokens).         
+       55 +                                                              
+       56 +**Tailscale** (admin console):                                
+       57 +                                                              
+       58 +1. **DNS**: enable MagicDNS and HTTPS certificates.           
+       59 +2. **Access controls**: add a tag that may use Funnel, plus an
+          + SSH rule for it. If `nodeAttrs` / `ssh` already exist, merge 
+          +into them:                                                    
+       60 +   ```jsonc                                                   
+       61 +   "tagOwners": { "tag:ghost": ["autogroup:admin"] },         
+       62 +   "nodeAttrs": [ { "target": ["tag:ghost"], "attr": ["funnel"
+          +] } ],                                                        
+       63 +   "ssh": [                                                   
+       64 +     // "accept", not "check": verify.sh and destroy.sh run no
+          +n-interactive commands over Tailscale SSH                     
+       65 +     { "action": "accept", "src": ["autogroup:admin"], "dst": 
+          +["tag:ghost"], "users": ["root"] }                            
+       66 +   ]                                                          
+       67 +   ```                                                        
+       68 +3. **Settings → Keys → Generate auth key**: pre-approved, tag 
+          +`tag:ghost`.                                                  
+       69 +   - **For a real server:** single-use and not ephemeral. The 
+          +node then survives reboots and outages, and the key is useless
+          + after the first boot.                                        
+       70 +   - **For `--local` test runs:** reusable and ephemeral. One 
+          +key serves several runs, and deleted VMs drop out of the tailn
+          +et on their own.                                              
+       71 +                                                              
+       72  ## Deploy
+       73  
+       74  ```bash
+       75  cd task2-ghost-hetzner
+       32 -cp .env.example .env    # fill in the values below            
+       33 -./deploy.sh                                                   
+       76 +cp .env.example .env      # fill in TS_AUTHKEY, TS_TAILNET_DNS
+          +, HCLOUD_TOKEN                                                
+       77 +./deploy.sh               # Hetzner Cloud                     
+       78 +./deploy.sh --local       # or: a local Multipass VM from the 
+          +same cloud-init (no Hetzner account needed)                   
+       79  ```
+       80  
+       81  | Variable | Description | Default |
+       37 -|----------|-------------|---------|                          
+       38 -| HCLOUD_TOKEN | Hetzner API token | — |                      
+       39 -| TS_AUTHKEY | Tailscale auth key | — |                       
+       40 -| TS_TAILNET_DNS | MagicDNS suffix, e.g. `tail1234.ts.net` | —
+          - |                                                            
+       41 -| SERVER_NAME | Server and tailnet hostname | ghost-blog |    
+       42 -| SERVER_TYPE | Hetzner server type | <type> |                
+       43 -| LOCATION | Hetzner location | fsn1 |                        
+       82 +|---|---|---|                                                 
+       83 +| `TS_AUTHKEY` | Tailscale auth key (see above) | required |  
+       84 +| `TS_TAILNET_DNS` | MagicDNS suffix, e.g. `tail1234.ts.net` (
+          +`tailscale status --json \| jq -r .MagicDNSSuffix`) | required
+          + |                                                            
+       85 +| `HCLOUD_TOKEN` | Hetzner API token | required for Hetzner mo
+          +de |                                                          
+       86 +| `SERVER_NAME` | Server name and tailnet hostname; the blog U
+          +RL is `https://<SERVER_NAME>.<TS_TAILNET_DNS>` | `ghost-blog` 
+          +|                                                             
+       87 +| `SERVER_TYPE` | Hetzner server type. Must be ARM or x86 to m
+          +atch the image; the script checks it exists (`hcloud server-ty
+          +pe list`) | `cax11` (2 ARM vCPU, 4 GB) |                      
+       88 +| `LOCATION` | Hetzner location (`hcloud location list`) | `fs
+          +n1` |                                                         
+       89 +| `GHOST_ADMIN_EMAIL` / `GHOST_ADMIN_PASSWORD` | Ghost owner a
+          +ccount. The password is generated if empty | `admin@example.co
+          +m` / random |                                                 
+       90 +| `GHOST_BLOG_TITLE` | Blog title | `Ghost on Hetzner` |      
+       91  
+       45 -> ⚠️ Open `https://<SERVER_NAME>.<TS_TAILNET_DNS>/ghost` right
+          - after deploy and create the owner account — until then, anyon
+          -e who finds the URL could claim it.                           
+       92 +A deploy takes 5–10 minutes, mostly package installs, image pu
+          +lls and MySQL init. When it finishes:                         
+       93  
+       47 -## Verify                                                     
+       94 +- **Blog:** `https://<SERVER_NAME>.<TS_TAILNET_DNS>`          
+       95 +- **Admin panel:** `…/ghost`. Credentials are in `.ghost-admin
+          +-credentials` (gitignored, mode 600).                         
+       96 +- **Admin shell:** `tailscale ssh root@<SERVER_NAME>`         
+       97  
+       49 -- Blog: `https://<SERVER_NAME>.<TS_TAILNET_DNS>`              
+       50 -- No public SSH: `nc -z -w5 <public IP> 22` fails (deploy.sh c
+          -hecks this and prints PASS)                                   
+       51 -- Admin shell: `tailscale ssh root@<SERVER_NAME>`             
+       98 +`deploy.sh` creates the Ghost owner account itself through the
+          + Ghost setup API. Without that, anyone who opened `/ghost` bef
+          +ore you could claim the blog.                                 
+       99  
+      100 +## Verification                                               
+      101 +                                                              
+      102 +`verify.sh` runs at the end of every deploy. Output of a clean
+          + `./deploy.sh --local` run:                                   
+      103 +                                                              
+      104 +```                                                           
+      105 +VERIFY_OUTPUT_PLACEHOLDER                                     
+      106 +```                                                           
+      107 +                                                              
+      108 +How each check works:                                         
+      109 +                                                              
+      110 +- **Public blog.** The hostname is resolved through public DNS
+          + (`1.1.1.1`) and requested with `curl --resolve`. The request 
+          +therefore goes over the internet to Funnel's public ingress, n
+          +ot through this machine's tailnet connection.                 
+      111 +- **Closed ports.** TCP connects to the server's public IP on 
+          +ports 22, 80, 443 and 2368. Each must be refused or time out. 
+      112 +- **Inside the server.** These checks run over Tailscale SSH. 
+          +That the commands run at all proves admin access works.       
+      113 +  - `systemctl is-enabled` reports `masked` for both SSH units
+          +.                                                             
+      114 +  - `ufw status` shows deny (incoming).                       
+      115 +  - `ss -tln` shows no listener outside loopback and the tailn
+          +et addresses.                                                 
+      116 +                                                              
+      117 +What `--local` does **not** cover is the Hetzner API part of `
+          +deploy.sh`:                                                   
+      118 +- `hcloud firewall create`;                                   
+      119 +- `hcloud server create --firewall … --user-data-from-file …`;
+      120 +- `hcloud server ip`.                                         
+      121 +                                                              
+      122 +These are standard `hcloud` CLI calls, but they have not been 
+          +run.                                                          
+      123 +                                                              
+      124 +**Manual check:** open the blog URL on a phone with Tailscale 
+          +switched off, on mobile data.                                 
+      125 +                                                              
+      126  ## Operate
+      127  
+       55 -<logs, updating Ghost, backup approach>                       
+      128 +```bash                                                       
+      129 +tailscale ssh root@ghost-blog                                 
+      130 +cat /var/log/ghost-bootstrap.log                          # wh
+          +at cloud-init did                                             
+      131 +cd /opt/ghost && docker compose ps                        # co
+          +ntainer state                                                 
+      132 +docker compose logs -f ghost                              # Gh
+          +ost logs                                                      
+      133 +docker compose pull && docker compose up -d               # up
+          +date Ghost / MySQL within the pinned major versions           
+      134 +tailscale funnel status                                   # wh
+          +at is published                                               
+      135 +```                                                           
+      136  
+      137 +**Backups are not automated.** Manual backup:                 
+      138 +                                                              
+      139 +```bash                                                       
+      140 +cd /opt/ghost && set -a && . ./.env && set +a                 
+      141 +docker compose exec -T db mysqldump -uroot -p"$DB_ROOT_PASSWOR
+          +D" ghost > ghost-$(date +%F).sql                              
+      142 +docker run --rm -v ghost_content:/c -v "$PWD":/b alpine tar cz
+          +f /b/content-$(date +%F).tgz -C /c .                          
+      143 +```                                                           
+      144 +                                                              
+      145  ## Destroy
+      146  
+      147  ```bash
+       60 -./destroy.sh            # asks for confirmation; --yes to skip
+      148 +./destroy.sh            # Hetzner: logs the node out of the ta
+          +ilnet, deletes the server and the firewall                    
+      149 +./destroy.sh --local    # local VM                            
+      150  ```
+      151  
+       63 -Then remove the device in the Tailscale admin console.        
+      152 +The script asks you to type the server name. Pass `--yes` to s
+          +kip that.                                                     
+      153  
+      154 +If the device is still listed in the tailnet afterwards, the s
+          +cript says so. Remove it at <https://login.tailscale.com/admin
+          +/machines>. Otherwise the next deploy would get a different ho
+          +stname (`ghost-blog-1`), so `deploy.sh` refuses to start while
+          + a device with that name exists.                              
+      155 +                                                              
+      156  ## Security notes
+      157  
+       67 -<what's protected; residual risks: Funnel is public, /ghost is
+          - publicly reachable, auth key stays in cloud-init user-data (m
+          -itigated by single-use key)>                                  
+      158 +**Protected:**                                                
+      159 +- No inbound port on the public IP, including SSH.            
+      160 +- Admin access requires tailnet membership plus the Tailscale 
+          +SSH ACL.                                                      
+      161 +- DB passwords are generated on the server and never leave it.
+      162 +- The auth key is written to a root-only file, used once and s
+          +hredded.                                                      
+      163  
+      164 +**Residual risks:**                                           
+      165 +- **The blog and `/ghost` are public by design.** Funnel publi
+          +shes the whole site, so the admin login is protected by the Gh
+          +ost password only. Funnel can't publish a path subset while ke
+          +eping another path tailnet-only on the same port. One option i
+          +s to serve the admin on a second hostname that is not funnelle
+          +d.                                                            
+      166 +- **The auth key remains in cloud-init user-data**, which on H
+          +etzner is readable from inside the VM through the metadata ser
+          +vice. A single-use key that is already consumed limits the dam
+          +age.                                                          
+      167 +- **Hetzner emails a root password** when a server is created 
+          +without an SSH key. With sshd masked, it is usable only throug
+          +h the Hetzner web console (VNC). That is the intended break-gl
+          +ass path if Tailscale is down.                                
+      168 +- **Tailscale is a dependency.** If the tailnet or Funnel is u
+          +navailable, so is the blog.                                   
+      169 +                                                              
+      170  ## Alternatives considered
+      171  
+       71 -<Cloudflare Tunnel + Access (needs a domain), Terraform vs hcl
+          -oud CLI, Ghost-CLI on bare host vs Docker>                    
+      172 +| Option | Why not chosen |                                   
+      173 +|---|---|                                                     
+      174 +| **Cloudflare Tunnel + Cloudflare Access** | Also works with 
+          +no inbound ports, and Access would protect `/ghost` better. It
+          + needs a domain on Cloudflare, though; Tailscale Funnel gives 
+          +a public HTTPS URL without one. For a production blog with its
+          + own domain, this would be my choice |                        
+      175 +| **Terraform (hcloud provider)** | Declarative state and plan
+          +s, but more moving parts for one server. The `hcloud` CLI keep
+          +s the "one click" a single readable script |                  
+      176 +| **Ghost-CLI on the host (nginx + systemd)** | The officially
+          + documented production setup, but more packages on the host an
+          +d harder to make reproducible. Docker Compose gives one file, 
+          +pinned major versions and easy updates |                      
+      177 +| **WireGuard / SSH reverse tunnel to a relay** | Needs a seco
+          +nd server with a public port, so the problem just moves |     
+      178  
+      179  ## Limitations
+      180  
+       75 -<no SMTP, no automated backups, no custom domain, no monitorin
+          -g — and what I'd do with more time>                           
+      181   No newline at end of file
+      182 +- **Not run against the real Hetzner API** (see [Verification]
+          +(#verification)).                                             
+      183 +- **No SMTP.** Ghost cannot send newsletters or password-reset
+          + emails. Staff device verification is disabled because its cod
+          +es are emailed.                                               
+      184 +- **No custom domain:** the blog lives on `*.ts.net`.         
+      185 +- **No automated backups, monitoring or log shipping.**       
+      186 +- **No idempotent re-run.** `deploy.sh` refuses to touch an ex
+          +isting server; `destroy.sh` first, then deploy again.         
+      187 +- **Funnel's public endpoint takes a few minutes to start answ
+          +ering** after the first `tailscale funnel`. `verify.sh` retrie
+          +s for up to 5 minutes.                                        
+      188 +                                                              
+      189 +With more time:                                               
+      190 +- SMTP (e.g. Mailgun);                                        
+      191 +- nightly `mysqldump` + content tarball to Hetzner Object Stor
+          +age;                                                          
+      192 +- Cloudflare Tunnel + Access for a custom domain and a protect
+          +ed `/ghost`;                                                  
+      193 +- a CI job that runs `deploy.sh --local` end to end.          
+      194 +                                                              
+      195 +## Troubleshooting                                            
+      196 +                                                              
+      197 +| Symptom | Likely cause |                                    
+      198 +|---|---|                                                     
+      199 +| `server did not join the tailnet` | The auth key is expired,
+          + used or not pre-approved, or `tag:ghost` is missing from `tag
+          +Owners` |                                                     
+      200 +| Tailnet URL works, public one does not | Funnel is not allow
+          +ed for `tag:ghost` (`nodeAttrs`), or HTTPS certificates are di
+          +sabled, or Funnel is still starting (wait a few minutes) |    
+      201 +| `tailscale ssh` asks for a browser login | The SSH rule uses
+          + `"action": "check"`; use `"accept"` for `tag:ghost` |        
+      202 +| `a device named … already exists` | Remove the old device in
+          + the admin console, or wait for an ephemeral one to disappear 
+          +|                                                             
+      203 +| `multipass could not create the VM` | The first run download
+          +s the Ubuntu image; check the network, then retry |           
+
+⏺ Я помилився в рядку про SERVER_TYPE: образ Hetzner сам підлаштовується під
+  архітектуру типу сервера. Далі перевірю інші рядки.
+
+⏺ Update(README.md)
+  ⎿  Added 1 line, removed 1 line
+      84  | `TS_TAILNET_DNS` | MagicDNS suffix, e.g. `tail1234.ts.net` (`
+          tailscale status --json \| jq -r .MagicDNSSuffix`) | required |
+      85  | `HCLOUD_TOKEN` | Hetzner API token | required for Hetzner mod
+          e |
+      86  | `SERVER_NAME` | Server name and tailnet hostname; the blog UR
+          L is `https://<SERVER_NAME>.<TS_TAILNET_DNS>` | `ghost-blog` |
+      87 -| `SERVER_TYPE` | Hetzner server type. Must be ARM or x86 to ma
+         -tch the image; the script checks it exists (`hcloud server-type
+         - list`) | `cax11` (2 ARM vCPU, 4 GB) |                         
+      87 +| `SERVER_TYPE` | Hetzner server type, ARM (`cax*`) or x86 (`cx
+         +*`, `cpx*`). Hetzner picks the matching `ubuntu-24.04` image, a
+         +nd all container images are multi-arch. The script checks that 
+         +the type exists (`hcloud server-type list`) | `cax11` (2 ARM vC
+         +PU, 4 GB), the same architecture as the Apple Silicon test VM |
+      88  | `LOCATION` | Hetzner location (`hcloud location list`) | `fsn
+          1` |
+      89  | `GHOST_ADMIN_EMAIL` / `GHOST_ADMIN_PASSWORD` | Ghost owner ac
+          count. The password is generated if empty | `admin@example.com`
+           / random |
+      90  | `GHOST_BLOG_TITLE` | Blog title | `Ghost on Hetzner` |
+
+⏺ README для Task 2 написано, лишилося вставити туди реальний вивід перевірок.
+  Повний цикл (очікування, деплой, видалення, перевірка прибирання) ще йде у
+  фоні. Результат покажу, щойно він завершиться.
+
+❯ який прогрес?
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Сервер уже понад 6 хвилин не з'являється в tailnet, а минулого разу на цьому
+  етапі він був, тож я читаю системну консоль VM через Multipass.
+
+  Listed 1 directory (ctrl+o to expand)
+
+⏺ Найімовірніша причина — ключ. Перевірте це в консолі Tailscale.
+
+  Ключ уже двічі успішно підключав сервер: о ~17:18 і після першого destroy.
+  Якщо він одноразовий (без Reusable), то вже використаний, і tailscale up на
+  новій VM отримує відмову. Через це сервер ніколи не з'явиться в tailnet. На це
+  вказує і те, що старий пристрій не зник сам. Найпевніше, ключ був не з тих
+  налаштувань, які я пропонував: Reusable + Ephemeral.
+
+  Зазирнути у VM, щоб підтвердити це, я не можу: SSH там закритий, саме так і
+  задумано.
+
+  Що зробити:
+  1. Відкрийте Tailscale → Settings → Keys і подивіться на поточний ключ. Якщо
+     він позначений як використаний або не має Reusable, причина знайдена.
+  2. Створіть новий: Reusable ✓, Ephemeral ✓, Pre-approved ✓, Tags: tag:ghost,
+     термін дії 1 день.
+  3. Вставте його в task2-ghost-hetzner/.env у рядок TS_AUTHKEY=.
+
+  Поточний прогін сам упаде о ~17:54, коли сплинуть 10 хвилин очікування, і
+  destroy.sh одразу видалить VM. Коли замінете ключ, напишіть, і я запущу цикл
+  заново.
+[Image #3]
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Причина з'ясована: ключ був одноразовим і вже використаним, тому на нову VM
+  його не вистачило. Зупиняю поточний прогін, щоб він одразу запустив destroy.sh
+  і прибрав VM.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Background command "Wait for stale device, deploy, destroy, check cleanup"
+failed with exit code 144
+
+⏺ Мій pkill зачепив фоновий ланцюжок разом із deploy.sh, тож destroy.sh не
+  запустився. Тепер видаляю VM вручну.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ VM видалено, нічого зайвого не лишилося. Тепер потрібен новий ключ.
+
+  Tailscale → Settings → Keys → Generate auth key:
+  - Reusable: ✓ увімкнути. Саме через його відсутність усе й зупинилося.
+  - Expiration: 1 день.
+  - Ephemeral: ✓
+  - Pre-approved: ✓
+  - Tags: ✓ tag:ghost
+
+  Вставте ключ у task2-ghost-hetzner/.env у рядок TS_AUTHKEY=... і напишіть
+  «готово». Тоді запущу повний цикл: деплой, перевірки, destroy і перевірка, що
+  з tailnet усе прибрано. Після цього ще раз підніму блог і залишу його
+  працювати, щоб ви перевірили його з телефона.
+
+  Із цієї помилки теж є користь для README. Одноразовий ключ — правильний вибір
+  для справжнього сервера. Але якщо його вже використано, сервер мовчки не
+  підключається, а deploy.sh чекає 10 хвилин і лише тоді падає. Допишу це в
+  Troubleshooting.
+
+[Image #4]
+
+⏺ Налаштування правильні: Reusable ✓, Ephemeral ✓, Tags tag:ghost ✓.
+
+  Дві дрібниці:
+  - Expiration 7 днів підходить. Можна поставити 1, бо reusable-ключ безпечніше
+    тримати короткоживучим, але це не критично.
+  - Pre-approved. Якщо прокрутите вниз і такого перемикача не буде, нічого
+    страшного. Він з'являється лише тоді, коли в tailnet увімкнене ручне
+    схвалення пристроїв. Перші запуски пройшли без нього, отже, у вас це
+    схвалення вимкнене.
+
+  Натискайте Generate key, вставте ключ у task2-ghost-hetzner/.env у рядок
+  TS_AUTHKEY= і напишіть «готово».
+
+❯ змінив, запусти ше раз
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Новий ключ встановлено, стан чистий. Запускаю в фоні повний цикл: деплой,
+  destroy з перевіркою прибирання, а потім повторний деплой, щоб блог працював
+  для вашої перевірки з телефона, і він же перевірить повторне використання
+  ключа.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Повний цикл запущено, він займе приблизно 20 хвилин. Тим часом додаю в README
+  урок про одноразовий ключ:
+
+⏺ Update(README.md)
+  ⎿  Added 1 line, removed 1 line
+      195  
+      196  | Symptom | Likely cause |
+      197  |---|---|
+      198 -| `server did not join the tailnet` | The auth key is expired,
+          - used or not pre-approved, or `tag:ghost` is missing from `tag
+          -Owners` |                                                     
+      198 +| `server did not join the tailnet` (after a 10-minute wait) |
+          + Most often a **single-use key that was already used**: every 
+          +deploy with a single-use key needs a fresh key. The server can
+          +not report this, because its only way out is the tailnet it fa
+          +iled to join. Other causes: the key expired, it is not pre-app
+          +roved while device approval is on, or `tag:ghost` is missing f
+          +rom `tagOwners` |                                             
+      199  | Tailnet URL works, public one does not | Funnel is not allow
+           ed for `tag:ghost` (`nodeAttrs`), or HTTPS certificates are di
+           sabled, or Funnel is still starting (wait a few minutes) |
+      200  | `tailscale ssh` asks for a browser login | The SSH rule uses
+            `"action": "check"`; use `"accept"` for `tag:ghost` |
+      201  | `a device named … already exists` | Remove the old device in
+            the admin console, or wait for an ephemeral one to disappear 
+           |
+
+⏺ Update(README.md)
+  ⎿  Added 1 line, removed 1 line
+      66     ]
+      67     ```
+      68  3. **Settings → Keys → Generate auth key**: pre-approved, tag `
+          tag:ghost`.
+      69 -   - **For a real server:** single-use and not ephemeral. The n
+         -ode then survives reboots and outages, and the key is useless a
+         -fter the first boot.                                           
+      69 +   - **For a real server:** single-use and not ephemeral. The n
+         +ode then survives reboots and outages, and the key is useless a
+         +fter the first boot. Every new deploy needs a new key.         
+      70     - **For `--local` test runs:** reusable and ephemeral. One k
+          ey serves several runs, and deleted VMs drop out of the tailnet
+           on their own.
+      71  
+      72  ## Deploy
+
+⏺ Цикл працює у фоні, результат покажу, щойно він завершиться. Тим часом я додав
+  у README в розділ Troubleshooting пояснення про використаний одноразовий
+  ключ. Саме через нього ми щойно втратили 10 хвилин.
+
+❯ я перепідключив інтернет і все ніби скинулось, перевір
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Your Mac is back online in Tailscale and the VM is running, but the VM reaches
+  the internet through your Mac, so it lost connectivity too and shows as
+  offline. The risk is that the drop hit during the Ghost and MySQL image pulls
+  and bootstrap may have failed; I'm giving the VM a minute to recover and then
+  checking the bootstrap log.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Інтернет-обрив перервав завантаження образу Ghost, тож bootstrap зупинився і
+  Ghost з Funnel не запустилися. Видаляю цю VM, додаю 3 спроби запуску
+  контейнерів у cloud-init.yaml і запускаю один чистий деплой.
+
+⏺ Bash(pkill -f full-cycle.sh; pkill -f 'deploy.sh --local'; pkill -f 'multipass
+      launch'; sleep 2; cd
+      /Users/admin/fullstack-dev-test-task/task2-ghost-hetzner && multi…)
+  ⎿  Updated cloud-init.yaml (+6 -1)
+       90          umask 077
+       91          printf 'DB_PASSWORD=%s\nDB_ROOT_PASSWORD=%s\n' "$(open
+           ssl rand -hex 24)" "$(openssl rand -hex 24)" > .env
+       92        fi
+       93 -      docker compose up -d --wait                             
+       93 +      # Retry: a dropped connection during the image pull woul
+          +d otherwise abort the bootstrap.                              
+       94 +      for attempt in 1 2 3; do                                
+       95 +        docker compose up -d --wait && break                  
+       96 +        [[ $attempt -eq 3 ]] && exit 1                        
+       97 +        echo "docker compose failed (attempt $attempt), retryi
+          +ng in 15 s"; sleep 15                                         
+       98 +      done                                                    
+       99  
+      100        # 4. Publish Ghost on https://<hostname>.<tailnet>.ts.ne
+           t via Tailscale Funnel.
+      101        tailscale funnel --bg 2368
+⏺ Background command "Run full deploy/destroy/redeploy test cycle" failed with
+exit code 144
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Старий пристрій ghost-blog досі висить у tailnet, тож прошу видалити його
+  вручну на login.tailscale.com/admin/machines (⋯ → Remove); деплой уже запущено
+  й стартує, щойно пристрій зникне.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Поки йде деплой (~8–10 хв після видалення пристрою), готую коміт Task 2.
+  Реальний вивід перевірок вставлю, щойно деплой завершиться.
+
+❯ я видалив пристрій
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Деплой стартував о 18:00:46, одразу як ви видалили пристрій. Орієнтовно він
+  завершиться о 18:08–18:12, якщо інтернет знову не обірветься. Цього разу
+  cloud-init має 3 спроби запустити контейнери, тож короткий збій мережі вже не
+  зламає деплой.
+
+  Тим часом я готую коміт. Щойно буде результат, вставлю вивід у README,
+  закомічу, і можна буде пушити.
+
+❯ який прогрес?
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Сервер у tailnet піднято з 18:04, зараз завантажуються образи Ghost і MySQL,
+  як і в попередніх прогонах; перевіряю, наскільки це просунулося.
+
+  Ran 5 shell commands (ctrl+o to expand)
+
+⏺ Нічого не зламано: Tailscale зараз отримує TLS-сертифікат для ghost-blog, це
+  зазвичай займає 1–2 хвилини, і deploy.sh зачекає. Врахую також ліміт Let's
+  Encrypt у 5 сертифікатів на тиждень для одного імені.
+
+  Ran 3 shell commands (ctrl+o to expand)
+
+⏺ Ця проблема не з нашого боку: DNS-запити Tailscale обриваються по таймауту і
+  повторюються кожні ~30 секунд. Тим часом я дописую Task 2 з виводом успішного
+  прогону verify.sh (о ~17:35), а сьогоднішні збої фіксую в README.
+
+⏺ Bash(python3 -I - <<'EOF'
+      p = "README.md"; s = open(p).read()…)
+  ⎿  Updated README.md (+23 -2)
+       99  
+      100  ## Verification
+      101  
+      102 -`verify.sh` runs at the end of every deploy. Output of a clean
+          - `./deploy.sh --local` run:                                   
+      102 +`verify.sh` runs at the end of every deploy. Output against a 
+          +VM created by `./deploy.sh --local` (here `192.168.252.6` is t
+          +he VM's own address on the host network, the stand-in for the 
+          +public IP):                                                   
+      103  
+      104  ```
+      105 -VERIFY_OUTPUT_PLACEHOLDER                                     
+      105 +==> Verifying https://ghost-blog.tailbbeca6.ts.net (local mode
+          +)                                                             
+      106 +PASS blog is reachable from the internet via Tailscale Funnel 
+          +(ghost-blog.tailbbeca6.ts.net → 176.58.92.199)                
+      107 +PASS port 22 on public IP 192.168.252.6 is closed             
+      108 +PASS port 80 on public IP 192.168.252.6 is closed             
+      109 +PASS port 443 on public IP 192.168.252.6 is closed            
+      110 +PASS port 2368 on public IP 192.168.252.6 is closed           
+      111 +PASS admin shell via Tailscale SSH works                      
+      112 +PASS sshd is masked (ssh.socket and ssh.service)              
+      113 +PASS ufw is active and denies incoming traffic                
+      114 +PASS no TCP service listens on a public interface             
+      115 +                                                              
+      116 +PASS all checks passed                                        
+      117  ```
+      118  
+      119 +The Ghost owner account created by `deploy.sh` was also checke
+          +d: logging in through the Ghost Admin API with the generated c
+          +redentials returns `201`. No email verification is involved.  
+      120 +                                                              
+      121 +Issues found and fixed during the test runs:                  
+      122 +                                                              
+      123 +- **Funnel's public endpoint starts minutes after `tailscale f
+          +unnel`**, so `verify.sh` retries.                             
+      124 +- **A dropped connection during the image pull aborted the boo
+          +tstrap**, so the compose start is retried 3 times.            
+      125 +- **`multipass launch` needs longer than 2 minutes on the firs
+          +t run** (image download).                                     
+      126 +- **The tailnet logout in `destroy.sh` was killed together wit
+          +h the SSH session.** It now runs as a transient systemd unit; 
+          +this fix has not been re-tested.                              
+      127 +                                                              
+      128  How each check works:
+      129  
+      130  - **Public blog.** The hostname is resolved through public DNS
+            (`1.1.1.1`) and requested with `curl --resolve`. The request 
+           therefore goes over the internet to Funnel's public ingress, n
+           ot through this machine's tailnet connection.
+     ...
+      219  | Tailnet URL works, public one does not | Funnel is not allow
+           ed for `tag:ghost` (`nodeAttrs`), or HTTPS certificates are di
+           sabled, or Funnel is still starting (wait a few minutes) |
+      220  | `tailscale ssh` asks for a browser login | The SSH rule uses
+            `"action": "check"`; use `"accept"` for `tag:ghost` |
+      221  | `a device named … already exists` | Remove the old device in
+            the admin console, or wait for an ephemeral one to disappear 
+           |
+      222 +| Tailnet URL times out right after the server joined | Tailsc
+          +ale is still fetching the TLS certificate (`journalctl -u tail
+          +scaled \| grep cert`). Every new server needs a new certificat
+          +e, Let's Encrypt allows 5 per hostname per week, and the reque
+          +st goes through Tailscale's control plane, which was slow in o
+          +ne test run. Wait, or use a new `SERVER_NAME` |               
+      223  | `multipass could not create the VM` | The first run download
+           s the Ubuntu image; check the network, then retry |
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Коміт 7dacc28 зроблено; сканер секретів спрацював лише на плейсхолдері в
+  .env.example, а справжні ключі git ігнорує. Далі перевіряю деплой.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Task 2 закомічено (7dacc28), можна пушити:
+
+  git push -u origin main
+
+  На запит пароля вставте той самий GitHub-токен.
+
+  Останній прогін деплою досі не завершився. Сервер, Ghost і Funnel піднялися
+  (bootstrap пройшов до кінця), але сервіс Tailscale не встигає вчасно
+  відповідати на запит DNS-запису для TLS-сертифіката. Tailscale повторює спроби
+  сам, а deploy.sh чекатиме до ~18:14. Від наших скриптів це не залежить.
+
+  Тому в README я вставив вивід іншого прогону, де пройшли всі 9 перевірок. Він
+  теж справжній, з цієї ж сесії. Вивід першого запуску в README не потрапив:
+  тоді verify.sh ще не мав повторних спроб, і перевірка Funnel падала, поки
+  Funnel не встиг увімкнутися. Усе, що ламалося під час тестів, описане в README
+  разом із виправленнями.
+
+  - Час для Task 2. Я вписав у кореневий README ~2.5 h, оцінивши за цією сесією.
+    Якщо насправді інакше, виправте.
+  - destroy.sh. Те, що він видаляє VM, перевірено. А виправлення logout із
+    tailnet я після змін повторно не перевіряв, у README так і написано.
+  - Блог для перевірки з телефона. Якщо сертифікат таки видадуть, блог запрацює
+    за адресою https://ghost-blog.tailbbeca6.ts.net. VM я залишу, поки ви не
+    скажете її видалити.
+  - Транскрипт Task 2. Якщо додаватимете транскрипт цієї сесії, допишіть
+    посилання на нього в рядок «AI usage» кореневого README. Зараз там є лише
+    транскрипт Task 1.
+
+⏺ Background command "Wait up to 2 min for the TLS certificate" completed (exit
+code 0)
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Сертифіката досі немає: блог не відповідає, а мій 2-хвилинний цикл очікування
+  завершився без «HTTPS OK». Сам деплой ще чекає у фоні до ~18:14. Якщо
+  Tailscale встигне видати сертифікат, деплой пройде далі сам, якщо ні —
+  завершиться з помилкою. На закомічене це не впливає.
+
+  Головне зараз — запушити:
+
+  git push -u origin main
+
+  Напишіть, якщо push видасть помилку.
+
+❯ зроби README.md чистішим
+
+  Searched for 1 pattern, ran 1 shell command (ctrl+o to expand)
+
+⏺ Не запушено (ahead 1), тож правку внесу в коміт Task 2 без окремого коміту.
+  Далі прибираю примітки про хвилини, історію тестів і пояснення з
+  Troubleshooting.
+
+⏺ Bash(python3 -I - <<'EOF'
+      p = "task2-ghost-hetzner/README.md"; s = open(p).read()…)
+  ⎿  Updated README.md (+4 -12)
+      89  | `GHOST_ADMIN_EMAIL` / `GHOST_ADMIN_PASSWORD` | Ghost owner ac
+          count. The password is generated if empty | `admin@example.com`
+           / random |
+      90  | `GHOST_BLOG_TITLE` | Blog title | `Ghost on Hetzner` |
+      91  
+      92 -A deploy takes 5–10 minutes, mostly package installs, image pul
+         -ls and MySQL init. When it finishes:                           
+      92 +When it finishes:                                              
+      93  
+      94  - **Blog:** `https://<SERVER_NAME>.<TS_TAILNET_DNS>`
+      95  - **Admin panel:** `…/ghost`. Credentials are in `.ghost-admin-
+          credentials` (gitignored, mode 600).
+     ...
+      118  
+      119  The Ghost owner account created by `deploy.sh` was also checke
+           d: logging in through the Ghost Admin API with the generated c
+           redentials returns `201`. No email verification is involved.
+      120  
+      121 -Issues found and fixed during the test runs:                  
+      122 -                                                              
+      123 -- **Funnel's public endpoint starts minutes after `tailscale f
+          -unnel`**, so `verify.sh` retries.                             
+      124 -- **A dropped connection during the image pull aborted the boo
+          -tstrap**, so the compose start is retried 3 times.            
+      125 -- **`multipass launch` needs longer than 2 minutes on the firs
+          -t run** (image download).                                     
+      126 -- **The tailnet logout in `destroy.sh` was killed together wit
+          -h the SSH session.** It now runs as a transient systemd unit; 
+          -this fix has not been re-tested.                              
+      127 -                                                              
+      121  How each check works:
+      122  
+      123  - **Public blog.** The hostname is resolved through public DNS
+            (`1.1.1.1`) and requested with `curl --resolve`. The request 
+           therefore goes over the internet to Funnel's public ingress, n
+           ot through this machine's tailnet connection.
+     ...
+      196  - **No custom domain:** the blog lives on `*.ts.net`.
+      197  - **No automated backups, monitoring or log shipping.**
+      198  - **No idempotent re-run.** `deploy.sh` refuses to touch an ex
+           isting server; `destroy.sh` first, then deploy again.
+      206 -- **Funnel's public endpoint takes a few minutes to start answ
+          -ering** after the first `tailscale funnel`. `verify.sh` retrie
+          -s for up to 5 minutes.                                        
+      199  
+      200  With more time:
+      201  - SMTP (e.g. Mailgun);
+     ...
+      207  
+      208  | Symptom | Likely cause |
+      209  |---|---|
+      218 -| `server did not join the tailnet` (after a 10-minute wait) |
+          - Most often a **single-use key that was already used**: every 
+          -deploy with a single-use key needs a fresh key. The server can
+          -not report this, because its only way out is the tailnet it fa
+          -iled to join. Other causes: the key expired, it is not pre-app
+          -roved while device approval is on, or `tag:ghost` is missing f
+          -rom `tagOwners` |                                             
+      219 -| Tailnet URL works, public one does not | Funnel is not allow
+          -ed for `tag:ghost` (`nodeAttrs`), or HTTPS certificates are di
+          -sabled, or Funnel is still starting (wait a few minutes) |    
+      210 +| `server did not join the tailnet` | The auth key is already 
+          +used (single-use), expired or not pre-approved, or `tag:ghost`
+          + is missing from `tagOwners` |                                
+      211 +| Tailnet URL works, public one does not | Funnel is not allow
+          +ed for `tag:ghost` (`nodeAttrs`), or HTTPS certificates are di
+          +sabled, or Funnel is still starting |                         
+      212  | `tailscale ssh` asks for a browser login | The SSH rule uses
+            `"action": "check"`; use `"accept"` for `tag:ghost` |
+      213  | `a device named … already exists` | Remove the old device in
+            the admin console, or wait for an ephemeral one to disappear 
+           |
+      222 -| Tailnet URL times out right after the server joined | Tailsc
+          -ale is still fetching the TLS certificate (`journalctl -u tail
+          -scaled \| grep cert`). Every new server needs a new certificat
+          -e, Let's Encrypt allows 5 per hostname per week, and the reque
+          -st goes through Tailscale's control plane, which was slow in o
+          -ne test run. Wait, or use a new `SERVER_NAME` |               
+      214 +| Tailnet URL times out right after the server joined | Tailsc
+          +ale is still fetching the TLS certificate (`journalctl -u tail
+          +scaled \| grep cert`) |                                       
+      215  | `multipass could not create the VM` | The first run download
+           s the Ubuntu image; check the network, then retry |
+
+⏺ Прибрав примітки з task2-ghost-hetzner/README.md і вніс правку прямо в коміт
+  Task 2 (тепер він 7dacc28). Окремого коміту з правкою немає, тож можна пушити:
+  git push -u origin main.
+
+  Що прибрано:
+  - «A deploy takes 5–10 minutes…»;
+  - увесь список «Issues found and fixed during the test runs», разом із «not
+    been re-tested»;
+  - пункт у Limitations про те, що Funnel запускається кілька хвилин;
+  - у Troubleshooting: «after a 10-minute wait», «wait a few minutes», пояснення
+    про Let's Encrypt і повільний control plane. Рядки таблиці тепер короткі.
+
+  Що лишив, бо це вже не примітки про хід тестів:
+  - Зверху README: Hetzner API не запускався, перевірка йшла на локальній VM.
+    Раджу не прибирати. Рецензент побачить у коді --local, а без пояснення
+    відсутність перевірки на Hetzner виглядатиме як приховування.
+  - Розділ Verification з виводом перевірок і реченням про вхід в адмінку Ghost
+    (201).
+  - Рядок про ключі для --local test runs. Це інструкція, як запускати локальний
+    режим.
+
+  Якщо хочете прибрати ще щось, скажіть, що саме.
+
+❯ деплой не завершується — перевір, у чому проблема
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Повний деплой пройшов о ~17:20, і verify.sh дав 9 з 9 PASS, але весь ланцюг з
+  поточними скриптами ще не проходив від початку до кінця одним запуском.
+  Останній прогін застряг на TLS-сертифікаті від Tailscale, і зараз я перевіряю,
+  чи сервіс взагалі видає сертифікати.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Tailscale працює, тож проблема в NAT віртуальної машини, який скинувся після
+  перепідключення інтернету. Найкраще зробити новий чистий прогін, коли мережа
+  стабільна; це заодно перевірить виправлений logout у destroy.sh.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Background command "Wait for old device removal, then run final deploy" failed
+with exit code 144
+
+⏺ Виправлений destroy.sh відпрацював повністю: сервер зник із tailnet, VM
+  видалено. Зараз запускаю чистий деплой.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Чистий деплой стартував о ~18:15 і має завершитися о ~18:23–18:28. Поки він
+  іде, не перепідключайте інтернет: VM ходить у мережу через ваш Mac.
+
+  Якщо прогін завершиться з «all checks passed», я замінимо вивід у README на
+  цей і внесу правку в коміт Task 2. Тоді в README буде прогін поточної версії
+  скриптів від початку до кінця. Пушити варто після цього.
+
+❯ все працює?
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Публічна перевірка Funnel пройшла, блог відкривається з інтернету. Решту
+  перевірок дочекаюся за кілька секунд.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Так, усе працює. Чистий деплой поточної версії скриптів одним запуском
+  ./deploy.sh --local пройшов усі 9 перевірок:
+
+  ==> Verifying https://ghost-blog.tailbbeca6.ts.net (local mode)
+  PASS blog is reachable from the internet via Tailscale Funnel (ghost-blog.tailbbeca6.ts.net → 176.58.92.199)
+  PASS port 22 on public IP 192.168.252.6 is closed
+  PASS port 80 on public IP 192.168.252.6 is closed
+  PASS port 443 on public IP 192.168.252.6 is closed
+  PASS port 2368 on public IP 192.168.252.6 is closed
+  PASS admin shell via Tailscale SSH works
+  PASS sshd is masked (ssh.socket and ssh.service)
+  PASS ufw is active and denies incoming traffic
+  PASS no TCP service listens on a public interface
+  
+  PASS all checks passed
+  
+  Done.
+    Blog:         https://ghost-blog.tailbbeca6.ts.net
+    Admin panel:  https://ghost-blog.tailbbeca6.ts.net/ghost   (credentials in /Users/admin/fullstack-dev-test-task/task2-ghost-hetzner/.ghost-admin-credentials)
+    Admin shell:  tailscale ssh root@ghost-blog
+    Tear down:    ./destroy.sh --local
+  ### deploy exit=0, took 501s
+
+  Блог: https://ghost-blog.tailbbeca6.ts.net, адмінка: /ghost (облікові дані у
+  task2-ghost-hetzner/.ghost-admin-credentials).
