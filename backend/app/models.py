@@ -1,8 +1,10 @@
 import uuid
 from datetime import UTC, datetime
 
-from pydantic import EmailStr
-from sqlmodel import Field, Relationship, SQLModel
+from pydantic import EmailStr, computed_field
+from sqlmodel import Field, Relationship, SQLModel, String
+
+from app.core.permissions import Permission, Role, permissions_for
 
 
 def get_datetime_utc() -> datetime:
@@ -13,7 +15,13 @@ def get_datetime_utc() -> datetime:
 class UserBase(SQLModel):
     email: EmailStr = Field(unique=True, index=True, max_length=255)
     is_active: bool = True
-    is_superuser: bool = False
+    # VARCHAR, not a native Postgres ENUM: adding a role needs no migration.
+    # The Role enum validates values at the API boundary.
+    role: Role = Field(
+        default=Role.MEMBER,
+        sa_type=String(20),
+        sa_column_kwargs={"server_default": Role.MEMBER.value},
+    )
     full_name: str | None = Field(default=None, max_length=255)
 
 
@@ -32,7 +40,7 @@ class UserRegister(SQLModel):
 class UserUpdate(SQLModel):
     email: EmailStr | None = Field(default=None, max_length=255)
     is_active: bool | None = None
-    is_superuser: bool | None = None
+    role: Role | None = None
     full_name: str | None = Field(default=None, max_length=255)
     password: str | None = Field(default=None, min_length=8, max_length=128)
 
@@ -59,6 +67,14 @@ class User(UserBase, table=True):
 class UserPublic(UserBase):
     id: uuid.UUID
     created_at: datetime | None = None
+
+
+# Returned only by GET /users/me: tells the frontend what the user may do
+class UserMePublic(UserPublic):
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def permissions(self) -> list[Permission]:
+        return sorted(permissions_for(self.role))
 
 
 class UsersPublic(SQLModel):
