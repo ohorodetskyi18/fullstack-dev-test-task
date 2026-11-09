@@ -109,8 +109,10 @@ From `task1-rbac/backend`, with the database running:
 
 ```bash
 uv run bash scripts/test.sh                              # full suite with coverage
-uv run pytest tests/api/routes/test_rbac.py -v           # RBAC tests only
+FASTAPI_ENV=development uv run pytest tests/api/routes/test_rbac.py -v   # RBAC tests only
 ```
+
+`FASTAPI_ENV=development` must be set in the shell when calling pytest directly (as `scripts/test.sh` does): without it FastAPI refuses to start when the built frontend (`backend/app/frontend`) is missing.
 
 `test_rbac.py` contains a table-driven permission matrix (every permission-protected endpoint, plus own-data endpoints, × admin / manager / member / anonymous, with ids such as `member-cannot-list-users`), explicit privilege-escalation tests, 401 vs 403 checks and a check that denied attempts are logged.
 
@@ -126,7 +128,7 @@ End-to-end tests (Playwright, need the backend and `bunx playwright install chro
 - sets `role = 'admin'` where `is_superuser` was true,
 - drops `is_superuser`.
 
-It is applied by `scripts/prestart.sh` (`alembic upgrade head`). Roll back with `uv run alembic downgrade -1`: `is_superuser` is restored as `true` for admins; managers and members both become regular users, because the old schema cannot represent them.
+It is applied by `scripts/prestart.sh` (`alembic upgrade head`). Roll back with `uv run alembic downgrade -1`: `is_superuser` is restored as `true` for admins; managers and members both become regular users, because the old schema cannot represent them. After a downgrade → upgrade round trip they all come back as `member`, so re-assign the manager role (e.g. as admin on the Admin page); the seed script skips existing emails and will not do it.
 
 ## Decisions and notes
 
