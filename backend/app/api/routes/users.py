@@ -217,8 +217,9 @@ def update_user(
             detail="The user with this id does not exist in the system",
         )
     # Every user-management action leaves the acting admin in place, so
-    # forbidding admins to demote or deactivate themselves guarantees the API
-    # can never leave the system without an admin.
+    # forbidding admins to demote or deactivate themselves keeps at least one
+    # admin. Not race-proof: two admins demoting each other concurrently can
+    # both succeed (see NOTES.md).
     if db_user.id == current_user.id:
         loses_admin_role = (
             user_in.role is not None

@@ -21,6 +21,8 @@ About 2 hours of implementation with the agent, then about 1 hour of review with
 - **Frontend permissions can be stale** until `/users/me` is refetched (on reload, on any 403, after profile updates). This affects only what the UI shows; the API enforces every request.
 - **Unknown fields are ignored, not rejected.** `PATCH /users/me` or signup with `{"role": "admin"}` returns 200 and leaves the role unchanged (template behaviour of SQLModel schemas). Returning 422 with `extra="forbid"` would be more explicit.
 - **Template behaviour kept as-is:** JWTs live 8 days and cannot be revoked; logging in as an inactive user returns 400 "Inactive user".
+- **"At least one admin" is not race-proof.** Admins cannot demote or deactivate themselves (409), but two admins demoting each other at the same moment can both succeed. A full guarantee would need a locked count of remaining admins in the transaction. The rule is also strict: an admin cannot step down even when other admins exist (another admin has to do it).
+- **Recovery-preview header:** `POST /password-recovery-html-content/{email}` sends the email subject as an HTTP header; a non-Latin-1 `PROJECT_NAME` would make it fail (template behaviour).
 - **Migration downgrade is lossy:** managers and members both become regular users, because `is_superuser` cannot represent them.
 - **Tests wipe the dev database's users** (template fixture behaviour). Re-run `uv run python -m app.seed_demo_users` afterwards.
 - `scripts/test.sh` needs `uv run` (it calls `coverage` from the virtualenv).

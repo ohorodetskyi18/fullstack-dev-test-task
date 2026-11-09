@@ -13,7 +13,7 @@
 └── ai-conversations/          # AI transcripts
 ```
 
-**AI usage.** Both tasks were done with AI tools, as allowed by the assignment. Full transcripts are in [ai-conversations/](ai-conversations/): `01-planning.md` (analysing the task, choosing the approach, preparing agent prompts), `02-task1-rbac-agent.md` (implementation of task 1), `03-task2-ghost-agent.md` (implementation of task 2). The AI agent wrote most of the code. I defined the requirements and design decisions, reviewed each phase, and verified the results locally.
+**AI usage.** Both tasks were done with AI tools, as allowed by the assignment. Transcripts are in [ai-conversations/](ai-conversations/): `01-planning.md` (analysing the task, choosing the approach, preparing agent prompts), `02-task1-rbac-agent.md` (implementation of task 1), `03-task2-ghost-agent.md` (implementation of task 2). The AI agent wrote most of the code. I defined the requirements and design decisions, reviewed each phase, and verified the results locally.
 
 **Time spent.** Task 1: ~3 h including review fixes (see [NOTES.md](NOTES.md#time-spent)) · Task 2: ~<Y> h. Scope cuts and trade-offs: [NOTES.md](NOTES.md), [task2-ghost-hetzner/README.md#limitations](task2-ghost-hetzner/README.md#limitations).
 
@@ -80,9 +80,10 @@ Code checks **permissions**, never role names. A role is a named set of permissi
 Rules on top of the matrix:
 
 - Public signup (`POST /users/signup`) always creates a **member**; a `role` in the body is ignored. The same applies to `PATCH /users/me`.
-- An admin cannot demote or deactivate **themselves** (`409 Conflict`). Every user-management action leaves the acting admin in place, so the API can never leave the system without an admin.
+- An admin cannot demote or deactivate **themselves** (`409 Conflict`). Every user-management action leaves the acting admin in place, so this keeps at least one admin (not race-proof, see [NOTES.md](NOTES.md#known-limitations)).
 - Admins cannot delete their own account (they lack `account:delete_own`), whichever endpoint they use.
 - Creating a user with a role other than `member` also requires `users:manage` (role assignment).
+- Without `users:read` / `items:manage_any`, asking for someone else's user or item id returns 403 whether or not the id exists, so ids cannot be probed.
 
 ## How authorization works
 
