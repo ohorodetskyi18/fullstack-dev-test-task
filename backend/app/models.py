@@ -2,7 +2,7 @@ import uuid
 from datetime import UTC, datetime
 
 import sqlalchemy as sa
-from pydantic import EmailStr, computed_field
+from pydantic import EmailStr, computed_field, field_validator
 from sqlmodel import Field, Relationship, SQLModel
 
 from app.core.permissions import Permission, Role, permissions_for
@@ -49,6 +49,15 @@ class UserUpdate(SQLModel):
     role: Role | None = None
     full_name: str | None = Field(default=None, max_length=255)
     password: str | None = Field(default=None, min_length=8, max_length=128)
+
+    # Omitted means "leave unchanged"; an explicit null is a client error (422),
+    # not a NULL written into a NOT NULL column (500).
+    @field_validator("email", "is_active", "role", "password")
+    @classmethod
+    def _reject_explicit_null(cls, value: object) -> object:
+        if value is None:
+            raise ValueError("must not be null")
+        return value
 
 
 class UserUpdateMe(SQLModel):

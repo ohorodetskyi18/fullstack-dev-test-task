@@ -6,6 +6,7 @@ request must get 401, so a newly added role is denied everywhere by default.
 """
 
 import logging
+import uuid
 from collections.abc import Generator, Iterator
 from dataclasses import dataclass
 from datetime import timedelta
@@ -326,6 +327,30 @@ def test_role_change_applies_to_existing_token(client: TestClient, db: Session) 
 
     # Same token, new role: the role is loaded from the DB on every request.
     assert client.get(f"{API}/users/", headers=manager_headers).status_code == 403
+
+
+@pytest.mark.parametrize("field", ["role", "is_active", "email", "password"])
+def test_update_user_rejects_explicit_null(
+    client: TestClient, db: Session, field: str
+) -> None:
+    _, headers = create_user_with_role(client=client, db=db, role=ADMIN)
+    target = create_random_user(db)
+
+    r = client.patch(f"{API}/users/{target.id}", headers=headers, json={field: None})
+
+    assert r.status_code == 422
+
+
+@pytest.mark.parametrize("resource", ["users", "items"])
+def test_member_cannot_probe_ids(
+    client: TestClient, db: Session, resource: str
+) -> None:
+    _, headers = create_user_with_role(client=client, db=db, role=MEMBER)
+
+    r = client.get(f"{API}/{resource}/{uuid.uuid4()}", headers=headers)
+
+    # Same answer as for an existing id the member may not see: no 404 leak.
+    assert r.status_code == 403
 
 
 # --- 401 vs 403 and logging --------------------------------------------------

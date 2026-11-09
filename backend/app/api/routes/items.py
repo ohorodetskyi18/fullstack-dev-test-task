@@ -24,10 +24,12 @@ def get_item_or_403(
 ) -> Item:
     """Load an item the current user owns, or any item with items:manage_any."""
     item = session.get(Item, item_id)
-    if not item:
-        raise HTTPException(status_code=404, detail="Item not found")
-    if item.owner_id != current_user.id:
+    # Check the permission before the 404 (as in read_user_by_id), so that
+    # users without items:manage_any cannot probe which ids exist.
+    if item is None or item.owner_id != current_user.id:
         ensure_permission(request, current_user, Permission.ITEMS_MANAGE_ANY)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Item not found")
     return item
 
 
