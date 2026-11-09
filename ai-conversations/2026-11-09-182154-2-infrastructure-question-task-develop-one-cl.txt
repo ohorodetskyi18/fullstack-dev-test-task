@@ -1,5 +1,3 @@
-[Abridged and lightly edited: some messages removed, some prompts reworded for clarity, commit hashes and the README verification output updated to the final versions.]
-
 ❯ 2 - infrastructure question task - Develop one click script to deploy ghost
   blog platform at a Hetzner VPS with no publish SSH access, only through
   tunnels (provider/app)
@@ -1936,7 +1934,7 @@ code 0)
 
   Якщо хочете прибрати ще щось, скажіть, що саме.
 
-❯ деплой не завершується — перевір, у чому проблема
+❯ деплой не завершується, перевір у чому проблема
 
   Ran 1 shell command (ctrl+o to expand)
 
@@ -2002,3 +2000,32 @@ with exit code 144
 
   Блог: https://ghost-blog.tailbbeca6.ts.net, адмінка: /ghost (облікові дані у
   task2-ghost-hetzner/.ghost-admin-credentials).
+
+❯ запиши в README.md як запустити цей деплой
+
+  Read 1 file, ran 2 shell commands (ctrl+o to expand)
+
+⏺ Update(task2-ghost-hetzner/README.md)
+  ⎿  Added 26 lines
+
+⏺ Додав у task2-ghost-hetzner/README.md розділ «Quick start: run it locally»,
+  одразу перед Architecture, і закомітив його окремим комітом 983a2e2. У ньому
+  шість кроків:
+
+  1. Встановити інструменти (multipass, jq, gettext) і увійти в Tailscale на
+     цьому комп'ютері.
+  2. У консолі Tailscale:
+     - увімкнути MagicDNS і HTTPS;
+     - додати фрагмент ACL;
+     - створити ключ: reusable, ephemeral, тег tag:ghost.
+  3. Скопіювати .env.example у .env і заповнити TS_AUTHKEY та TS_TAILNET_DNS.
+  4. Запустити ./deploy.sh --local. Наприкінці має з'явитися «PASS all checks
+     passed».
+  5. Відкрити блог, адмінку на /ghost, пароль подивитися через
+     cat .ghost-admin-credentials.
+  6. Видалити все через ./destroy.sh --local.
+
+  Нижче два абзаци: як запустити повторно і чим відрізняється запуск на
+  Hetzner. Детальні розділи Prerequisites і Deploy лишилися як були.
+
+  Готово до push: git push -u origin main.
