@@ -2,7 +2,7 @@
 
 ## How this was built
 
-The work was done with an AI coding agent (Claude Code) in one session: I wrote the requirements and made the design decisions (permission model, matrix, status codes, process), reviewed each phase and verified the results. The agent wrote most of the code, tests and docs. The full transcript is in [`../ai-conversations/`](../ai-conversations/).
+The work was done with an AI coding agent (Claude Code): I wrote the requirements and made the design decisions (permission model, matrix, status codes, process), reviewed each phase and verified the results. The agent wrote most of the code, tests and docs. The session transcript is in [`ai-conversations/`](ai-conversations/). The repository was recreated at the root partway through the session (template moved from `task1-rbac/`, commits re-applied with `git am`), so commit hashes and `task1-rbac/` paths in the first part of the transcript differ from this repository.
 
 ## Time spent
 

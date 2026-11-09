@@ -1,8 +1,29 @@
+# Fullstack Dev Test Task
+
+| Task | Where | Summary |
+|------|-------|---------|
+| 1. RBAC for Full-Stack FastAPI Template | this repository (template + RBAC changes), [documented below](#task-1--rbac-for-the-full-stack-fastapi-template) | Roles admin / manager / member enforced in the FastAPI backend and React frontend, with migration, seed data, tests and ADRs |
+| 2. One-click Ghost on Hetzner without public SSH | [task2-ghost-hetzner/](task2-ghost-hetzner/) | `./deploy.sh` provisions a Hetzner VPS with no open inbound ports; the blog is published via Tailscale Funnel, admin access only via Tailscale SSH |
+
+```
+.
+├── backend/, frontend/, ...   # task 1: the template + RBAC changes
+├── docs/adr/, NOTES.md        # task 1: decisions, scope cuts, limitations
+├── task2-ghost-hetzner/       # task 2: deploy / destroy scripts, cloud-init, docs
+└── ai-conversations/          # AI transcripts
+```
+
+**AI usage.** Both tasks were done with AI tools, as allowed by the assignment. Full transcripts are in [ai-conversations/](ai-conversations/): `01-planning.md` (analysing the task, choosing the approach, preparing agent prompts), `02-task1-rbac-agent.md` (implementation of task 1), `03-task2-ghost-agent.md` (implementation of task 2). The AI agent wrote most of the code. I defined the requirements and design decisions, reviewed each phase, and verified the results locally.
+
+**Time spent.** Task 1: ~3 h including review fixes (see [NOTES.md](NOTES.md#time-spent)) · Task 2: ~<Y> h. Scope cuts and trade-offs: [NOTES.md](NOTES.md), [task2-ghost-hetzner/README.md#limitations](task2-ghost-hetzner/README.md#limitations).
+
+---
+
 # Task 1 — RBAC for the Full Stack FastAPI Template
 
 Role-based access control with three roles — **admin**, **manager**, **member** — enforced in the FastAPI backend and reflected in the React frontend.
 
-Based on [full-stack-fastapi-template](https://github.com/fastapi/full-stack-fastapi-template) @ [`aabb901`](https://github.com/fastapi/full-stack-fastapi-template/commit/aabb90126964a164e02aff39e7c385bb0598236d) (branch `master`). The first commit of this repository is the unmodified template, so `git diff <first commit>..HEAD -- task1-rbac` shows only the RBAC changes. The original template README is kept [below](#full-stack-fastapi-template).
+Based on [full-stack-fastapi-template](https://github.com/fastapi/full-stack-fastapi-template) @ [`aabb901`](https://github.com/fastapi/full-stack-fastapi-template/commit/aabb90126964a164e02aff39e7c385bb0598236d) (branch `master`). The first commit of this repository is the unmodified template, so every later commit contains only the changes made for this assignment. The original template README is kept [below](#full-stack-fastapi-template).
 
 **Contents:** [Quick start](#quick-start) · [Permission matrix](#permission-matrix) · [How authorization works](#how-authorization-works) · [Adding a new role](#adding-a-new-role) · [Running tests](#running-tests) · [Database migration](#database-migration) · [ADRs and notes](#decisions-and-notes)
 
@@ -12,8 +33,9 @@ Prerequisites: [Docker](https://docs.docker.com/get-docker/) with Compose, [uv](
 
 The repository ships a `.env` with local-development defaults (`changethis` placeholders, `FASTAPI_ENV=development`); it works as-is for local use. Never put real secrets in it.
 
+From the repository root:
+
 ```bash
-cd task1-rbac
 docker compose up -d --wait db mailpit   # PostgreSQL + Mailpit (http://localhost:8025)
 
 cd backend
@@ -23,10 +45,9 @@ uv run python -m app.seed_demo_users     # creates the manager and member demo u
 uv run fastapi dev                       # API on http://localhost:8000, docs at /docs
 ```
 
-In a second terminal:
+In a second terminal, from the repository root:
 
 ```bash
-cd task1-rbac
 bun install
 bun run dev                              # frontend on http://localhost:5173
 ```
@@ -98,16 +119,22 @@ flowchart TB
 
 ## Adding a new role
 
+The authorization logic changes in one file; no migration is needed.
+
 1. Add it to `Role` in [`backend/app/core/permissions.py`](backend/app/core/permissions.py).
 2. Add its permission set to `ROLE_PERMISSIONS` in the same file.
 
-No migration is needed. Then regenerate the frontend client (`bash scripts/generate-client.sh` from `task1-rbac/`); the TypeScript build will point you to [`frontend/src/lib/roles.ts`](frontend/src/lib/roles.ts) to add the display label. The table-driven test denies the new role everywhere by default, and `test_read_me_returns_permissions_of_role` asks you to state its permissions explicitly.
+Then the frontend label, the tests and the docs:
+
+3. Regenerate the frontend client (`bash scripts/generate-client.sh` from the repository root) and add the display label in [`frontend/src/lib/roles.ts`](frontend/src/lib/roles.ts). It is a `Record<Role, string>`, so `bun run build` (which type-checks) fails until the label exists.
+4. In [`test_rbac.py`](backend/tests/api/routes/test_rbac.py), add the role to `EXPECTED_PERMISSIONS` and to the `allowed` roles of every `ENDPOINTS` row whose permission it gets. The tests fail until both match `ROLE_PERMISSIONS`.
+5. Add a column to the [permission matrix](#permission-matrix).
 
 A new **permission** additionally needs `require_permission(...)` / `ensure_permission(...)` on the endpoints it protects and `can(...)` where the UI should react to it.
 
 ## Running tests
 
-From `task1-rbac/backend`, with the database running:
+From `backend/`, with the database running:
 
 ```bash
 uv run bash scripts/test.sh                              # full suite with coverage
@@ -120,7 +147,7 @@ FASTAPI_ENV=development uv run pytest tests/api/routes/test_rbac.py -v   # RBAC 
 
 The template's test fixture deletes all users and items when the session ends, so after running tests re-create the demo users with `uv run python -m app.seed_demo_users` (it also re-creates the admin).
 
-End-to-end tests (Playwright, need the backend and `bunx playwright install chromium` once): `cd task1-rbac/frontend && bunx playwright test`.
+End-to-end tests (Playwright, need the backend and `bunx playwright install chromium` once): `cd frontend && bunx playwright test`.
 
 ## Database migration
 
