@@ -1,5 +1,5 @@
 import type { Permission } from "@/client"
-import useAuth from "./useAuth"
+import useCurrentUser from "./useCurrentUser"
 
 /**
  * What the current user may do, as computed by the backend (GET /users/me).
@@ -8,12 +8,13 @@ import useAuth from "./useAuth"
  * Hiding UI with `can()` is UX only; the API enforces every check.
  */
 const usePermissions = () => {
-  const { user, isLoading } = useAuth()
+  const { data: user, isLoading, isError } = useCurrentUser()
   const permissions = user?.permissions ?? []
 
   const can = (permission: Permission) => permissions.includes(permission)
 
-  return { can, permissions, isLoading }
+  // A failed load is not a "no": callers must not show "Access denied" for it.
+  return { can, permissions, isLoading, failedToLoad: isError && !user }
 }
 
 export default usePermissions

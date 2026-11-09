@@ -10,15 +10,21 @@ interface RequirePermissionProps {
   children: ReactNode
 }
 
-/** Renders children only if the current user has `permission`. */
 const RequirePermission = ({
   permission,
   children,
 }: RequirePermissionProps) => {
-  const { can, isLoading } = usePermissions()
+  const { can, isLoading, failedToLoad } = usePermissions()
 
   if (isLoading) {
     return <Skeleton className="h-32 w-full" data-testid="permission-loading" />
+  }
+  if (failedToLoad) {
+    return (
+      <p className="py-12 text-center text-muted-foreground" role="alert">
+        Could not load your permissions. Please reload the page.
+      </p>
+    )
   }
   if (!can(permission)) {
     return <AccessDenied />

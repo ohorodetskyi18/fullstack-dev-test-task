@@ -1,30 +1,22 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
 
 import {
   type Body_login_login_access_token as AccessToken,
   LoginService,
-  type UserMePublic,
   type UserRegister,
   UsersService,
 } from "@/client"
 import { handleError } from "@/utils"
+import useCurrentUser, { isLoggedIn } from "./useCurrentUser"
 import useCustomToast from "./useCustomToast"
-
-const isLoggedIn = () => {
-  return localStorage.getItem("access_token") !== null
-}
 
 const useAuth = () => {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { showErrorToast } = useCustomToast()
 
-  const { data: user, isLoading } = useQuery<UserMePublic | null, Error>({
-    queryKey: ["currentUser"],
-    queryFn: async () => (await UsersService.readUserMe()).data,
-    enabled: isLoggedIn(),
-  })
+  const { data: user, isLoading } = useCurrentUser()
 
   const signUpMutation = useMutation({
     mutationFn: (data: UserRegister) =>
@@ -55,6 +47,9 @@ const useAuth = () => {
 
   const logout = () => {
     localStorage.removeItem("access_token")
+    // Drop the cached user and permissions, so the next user who logs in
+    // in this tab never sees the previous user's UI.
+    queryClient.clear()
     navigate({ to: "/login" })
   }
 

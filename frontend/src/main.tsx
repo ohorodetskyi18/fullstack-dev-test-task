@@ -24,7 +24,6 @@ const handleApiError = (error: Error) => {
   if (!(error instanceof AxiosError)) return
   const status = error.response?.status
   if (status === 401) {
-    // Missing, invalid or expired token: the session is over.
     localStorage.removeItem("access_token")
     window.location.href = "/login"
   } else if (status === 403) {
